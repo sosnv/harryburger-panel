@@ -95,7 +95,7 @@ export default function Orders() {
           const isPaid = order.status === "opłacono zamówienie";
           const total =
             order.items?.reduce(
-              (sum, item) => sum + item.price * item.quantity,
+              (sum, item) => sum + item.price * item.qty,
               0
             ) || 0;
           return (
@@ -161,10 +161,10 @@ export default function Orders() {
                     >
                       <div className="text-gray-200">
                         <span className="font-semibold">{item.name}</span> x
-                        {item.quantity}
+                        {item.qty}
                       </div>
                       <span className="text-white font-medium">
-                        {(item.price * item.quantity).toFixed(2)} zł
+                        {(item.price * item.qty).toFixed(2)} zł
                       </span>
                     </li>
                   ))}
