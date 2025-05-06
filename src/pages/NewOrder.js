@@ -1,9 +1,15 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import burgers from "../data/burgers";
 import extras from "../data/extras";
 import ufoBurgers from "../data/ufo-burgers";
 import { clientDb } from "../firebaseClientConfig";
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import {
+  collection,
+  addDoc,
+  serverTimestamp,
+  getDocs,
+} from "firebase/firestore";
+import { useDaySession } from "../contexts/DaySessionContext";
 
 // Wszystkie produkty
 const products = [
@@ -20,6 +26,10 @@ export default function NewOrder() {
   const [selectedSize, setSelectedSize] = useState("M");
   const [activeCategory, setActiveCategory] = useState("burger");
   const ordersCol = collection(clientDb, "orders");
+  const { selectedDate } = useDaySession();
+  const [warehouseSnapshot, setWarehouseSnapshot] = useState(null);
+  const [warehouseLoading, setWarehouseLoading] = useState(true);
+  const [nextOrderNumber, setNextOrderNumber] = useState(null);
 
   const addItem = (prod, selectedMeat) => {
     const key =
@@ -77,6 +87,7 @@ export default function NewOrder() {
       status: "oczekuje",
       timestamp: serverTimestamp(),
       isArchived: false,
+      orderNumber: nextOrderNumber,
     };
 
     try {
@@ -92,6 +103,37 @@ export default function NewOrder() {
   const filteredProducts = products.filter(
     (p) => p.category === activeCategory
   );
+
+  useEffect(() => {
+    async function fetchSnapshot() {
+      setWarehouseLoading(true);
+      const snapQ = collection(clientDb, "dailyWarehouseReports");
+      const snapDocs = await getDocs(snapQ);
+      const found = snapDocs.docs
+        .map((doc) => doc.data())
+        .find(
+          (snap) => snap.sessionDay === selectedDate && snap.type === "start"
+        );
+      setWarehouseSnapshot(found ? found.snapshot : null);
+      setWarehouseLoading(false);
+    }
+    fetchSnapshot();
+  }, [selectedDate]);
+
+  // Fetch next order number on mount
+  useEffect(() => {
+    async function fetchOrderNumber() {
+      const ordersCol = collection(clientDb, "orders");
+      const snap = await getDocs(ordersCol);
+      let maxNum = 0;
+      snap.docs.forEach((doc) => {
+        const n = doc.data().orderNumber;
+        if (typeof n === "number" && n > maxNum) maxNum = n;
+      });
+      setNextOrderNumber(maxNum + 1);
+    }
+    fetchOrderNumber();
+  }, []);
 
   return (
     <div className="p-6">

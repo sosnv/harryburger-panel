@@ -1,5 +1,12 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
-import { doc, getDoc } from "firebase/firestore";
+import {
+  doc,
+  getDoc,
+  deleteDoc,
+  collection,
+  getDocs,
+  writeBatch,
+} from "firebase/firestore";
 import { clientDb } from "../firebaseClientConfig";
 
 const DaySessionContext = createContext();
@@ -48,6 +55,41 @@ export function DaySessionProvider({ children }) {
     // eslint-disable-next-line
   }, [selectedDate]);
 
+  // Reset wybranego dnia
+  const resetSelectedDay = async () => {
+    setLoading(true);
+    try {
+      // Usuń sesję dnia
+      await deleteDoc(doc(clientDb, "dailySessions", selectedDate));
+      // Usuń snapshoty magazynowe
+      const snapQ = await getDocs(
+        collection(clientDb, "dailyWarehouseReports")
+      );
+      const batch = writeBatch(clientDb);
+      snapQ.docs.forEach((d) => {
+        if (d.data().sessionDay === selectedDate) batch.delete(d.ref);
+      });
+      // Usuń zamówienia z tego dnia
+      const ordersQ = await getDocs(collection(clientDb, "orders"));
+      ordersQ.docs.forEach((d) => {
+        const data = d.data();
+        if (
+          data.timestamp &&
+          data.timestamp.toDate().toISOString().split("T")[0] === selectedDate
+        ) {
+          batch.delete(d.ref);
+        }
+      });
+      await batch.commit();
+      await refreshSessionStatus();
+      alert("Dzień został zresetowany. Możesz ponownie rozpocząć dzień.");
+    } catch (err) {
+      alert("Błąd podczas resetowania dnia: " + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <DaySessionContext.Provider
       value={{
@@ -57,6 +99,7 @@ export function DaySessionProvider({ children }) {
         isDayEnded,
         loading,
         refreshSessionStatus,
+        resetSelectedDay,
       }}
     >
       {children}

@@ -78,7 +78,7 @@ export default function Orders() {
     <div className="space-y-6">
       <h2 className="text-3xl font-bold text-white">Aktywne zamówienia</h2>
       {/* Sortowanie */}
-      <div className="flex items-center justify-end mb-4">
+      <div className="flex items-center mb-4">
         <label className="mr-2 text-gray-300 font-medium">Sortuj:</label>
         <select
           value={sortOption}
@@ -91,116 +91,124 @@ export default function Orders() {
       </div>
 
       <ul className="space-y-4">
-        {sorted.map((order) => {
-          const isPaid = order.status === "opłacono zamówienie";
-          const total =
-            order.items?.reduce(
-              (sum, item) => sum + item.price * item.qty,
-              0
-            ) || 0;
-          return (
-            <li key={order.id} className="bg-[#1a1a1a] p-6 rounded-lg shadow">
-              {/* Nagłówek */}
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-xl font-semibold text-white">
-                  Zamówienie #{order.orderNumber}
-                </h3>
-                <span
-                  className={`px-3 py-1 rounded-full text-sm font-medium ${
-                    isPaid
-                      ? "bg-green-600 text-white"
-                      : "bg-blue-500 text-white"
-                  }`}
-                >
-                  {isPaid ? "Opłacone" : "Oczekuje"}
-                </span>
-              </div>
-
-              {/* Szczegóły w jednej linii */}
-              <div className="flex flex-wrap items-center justify-between w-full mb-4 text-gray-300 space-x-6">
-                <div className="flex items-center space-x-1">
-                  <p className="text-sm text-gray-400">Metoda:</p>
-                  <p className="text-white font-semibold">
-                    {order.paymentMethod === "cash"
-                      ? "Gotówka"
-                      : order.paymentMethod}
-                  </p>
-                </div>
-                <div className="flex items-center space-x-1">
-                  <p className="text-sm text-gray-400">Klient:</p>
-                  <p className="text-white font-semibold">
-                    {order.customerName}
-                  </p>
-                </div>
-                <div className="flex items-center space-x-1">
-                  <p className="text-sm text-gray-400">Typ:</p>
-                  <p className="text-white font-semibold">
-                    {order.orderType === "naMiejscu"
-                      ? "Na miejscu"
-                      : order.orderType === "naWynos"
-                      ? "Na wynos"
-                      : order.orderType}
-                  </p>
-                </div>
-                <div className="flex items-center space-x-1">
-                  <p className="text-sm text-gray-400">Złożone:</p>
-                  <p className="text-white font-semibold">
-                    {new Date(order.timestamp?.toDate()).toLocaleString()}
-                  </p>
-                </div>
-              </div>
-
-              {/* Pozycje */}
-              <div>
-                <p className="text-sm text-gray-400 mb-2">Pozycje</p>
-                <ul className="space-y-2">
-                  {order.items?.map((item, i) => (
-                    <li
-                      key={i}
-                      className="flex justify-between items-center py-2 px-4 bg-gray-700 rounded"
-                    >
-                      <div className="text-gray-200">
-                        <span className="font-semibold">{item.name}</span> x
-                        {item.qty}
-                      </div>
-                      <span className="text-white font-medium">
-                        {(item.price * item.qty).toFixed(2)} zł
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-
-              {/* Akcje i suma w jednej linii */}
-              <div className="flex justify-between items-center mt-4">
-                <div className="flex space-x-2">
-                  {!isPaid && (
-                    <button
-                      onClick={() => openConfirm(order.id, "paid")}
-                      className="bg-blue-500 hover:bg-blue-400 text-white font-bold px-4 py-2 rounded"
-                    >
-                      Oznacz jako opłacone
-                    </button>
-                  )}
-                  {isPaid && (
-                    <button
-                      onClick={() => openConfirm(order.id, "delivered")}
-                      className="bg-green-600 hover:bg-green-500 text-white font-bold px-4 py-2 rounded"
-                    >
-                      Oznacz jako wydane
-                    </button>
-                  )}
-                </div>
-                <div className="flex items-center">
-                  <span className="text-gray-300 font-medium mr-2">SUMA:</span>
-                  <span className="text-red-500 font-bold text-lg">
-                    {total.toFixed(2)} zł
+        {sorted.length > 0 ? (
+          sorted.map((order) => {
+            const isPaid = order.status === "opłacono zamówienie";
+            const total =
+              order.items?.reduce(
+                (sum, item) => sum + item.price * item.qty,
+                0
+              ) || 0;
+            return (
+              <li key={order.id} className="bg-[#1a1a1a] p-6 rounded-lg shadow">
+                {/* Nagłówek */}
+                <div className="flex justify-between items-center mb-4">
+                  <h3 className="text-xl font-semibold text-white">
+                    Zamówienie #{order.orderNumber}
+                  </h3>
+                  <span
+                    className={`px-3 py-1 rounded-full text-sm font-medium ${
+                      isPaid
+                        ? "bg-green-600 text-white"
+                        : "bg-blue-500 text-white"
+                    }`}
+                  >
+                    {isPaid ? "Opłacone" : "Oczekuje"}
                   </span>
                 </div>
-              </div>
-            </li>
-          );
-        })}
+
+                {/* Szczegóły w jednej linii */}
+                <div className="flex flex-wrap items-center justify-between w-full mb-4 text-gray-300 space-x-6">
+                  <div className="flex items-center space-x-1">
+                    <p className="text-sm text-gray-400">Metoda:</p>
+                    <p className="text-white font-semibold">
+                      {order.paymentMethod === "cash"
+                        ? "Gotówka"
+                        : order.paymentMethod}
+                    </p>
+                  </div>
+                  <div className="flex items-center space-x-1">
+                    <p className="text-sm text-gray-400">Klient:</p>
+                    <p className="text-white font-semibold">
+                      {order.customerName}
+                    </p>
+                  </div>
+                  <div className="flex items-center space-x-1">
+                    <p className="text-sm text-gray-400">Typ:</p>
+                    <p className="text-white font-semibold">
+                      {order.orderType === "naMiejscu"
+                        ? "Na miejscu"
+                        : order.orderType === "naWynos"
+                        ? "Na wynos"
+                        : order.orderType}
+                    </p>
+                  </div>
+                  <div className="flex items-center space-x-1">
+                    <p className="text-sm text-gray-400">Złożone:</p>
+                    <p className="text-white font-semibold">
+                      {new Date(order.timestamp?.toDate()).toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Pozycje */}
+                <div>
+                  <p className="text-sm text-gray-400 mb-2">Pozycje</p>
+                  <ul className="space-y-2">
+                    {order.items?.map((item, i) => (
+                      <li
+                        key={i}
+                        className="flex justify-between items-center py-2 px-4 bg-gray-700 rounded"
+                      >
+                        <div className="text-gray-200">
+                          <span className="font-semibold">{item.name}</span> x
+                          {item.qty}
+                        </div>
+                        <span className="text-white font-medium">
+                          {(item.price * item.qty).toFixed(2)} zł
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+
+                {/* Akcje i suma w jednej linii */}
+                <div className="flex justify-between items-center mt-4">
+                  <div className="flex space-x-2">
+                    {!isPaid && (
+                      <button
+                        onClick={() => openConfirm(order.id, "paid")}
+                        className="bg-blue-500 hover:bg-blue-400 text-white font-bold px-4 py-2 rounded"
+                      >
+                        Oznacz jako opłacone
+                      </button>
+                    )}
+                    {isPaid && (
+                      <button
+                        onClick={() => openConfirm(order.id, "delivered")}
+                        className="bg-green-600 hover:bg-green-500 text-white font-bold px-4 py-2 rounded"
+                      >
+                        Oznacz jako wydane
+                      </button>
+                    )}
+                  </div>
+                  <div className="flex items-center">
+                    <span className="text-gray-300 font-medium mr-2">
+                      SUMA:
+                    </span>
+                    <span className="text-red-500 font-bold text-lg">
+                      {total.toFixed(2)} zł
+                    </span>
+                  </div>
+                </div>
+              </li>
+            );
+          })
+        ) : (
+          <div className="bg-[#1a1a1a] p-6 rounded-lg shadow text-center">
+            <p className="text-gray-400 text-lg">Brak aktywnych zamówień</p>
+          </div>
+        )}
       </ul>
 
       {/* Modal potwierdzenia */}

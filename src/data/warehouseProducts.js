@@ -1,0 +1,22 @@
+export const warehouseProducts = [
+  { name: "SAŁATA", unit: "główkach", category: "warzywa" },
+  { name: "Pomidory", unit: "kilogramach", category: "warzywa" },
+  { name: "Cebula czerwona", unit: "kilogramach", category: "warzywa" },
+  { name: "SER Cheddar", unit: "paczkach po kilogramie", category: "nabiał" },
+  { name: "BOCZEK w/p", unit: "kilogramach", category: "mięso" },
+  { name: "FRYTKI - cienkie", unit: "kilogramach", category: "dodatki" },
+  { name: "Frytki Belgijskie", unit: "kilogramach", category: "dodatki" },
+  { name: "Frytki z Batatów", unit: "kilogramach", category: "dodatki" },
+  { name: "Krążki cebulowe", unit: "kilogramach", category: "dodatki" },
+  {
+    name: "Stripsy z kurczaka",
+    unit: "paczkach po kilogramie",
+    category: "mięso",
+  },
+  { name: "Mięso duże", unit: "sztukach", category: "mięso" },
+  { name: "Mięso małe", unit: "sztukach", category: "mięso" },
+  { name: "Bułki", unit: "sztukach", category: "pieczywo" },
+  { name: "Sosy burgerowe", unit: "sztukach po 1 litr", category: "sosy" },
+  { name: "Ketchup", unit: "sztukach po 1 litr", category: "sosy" },
+  { name: "Majonez", unit: "sztukach po 1 litr", category: "sosy" },
+];

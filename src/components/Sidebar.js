@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { NavLink } from "react-router-dom";
-import { collection, query, onSnapshot } from "firebase/firestore";
+import { collection, query, onSnapshot, getDocs } from "firebase/firestore";
 import { clientDb } from "../firebaseClientConfig";
 import { FaExclamationTriangle, FaLock } from "react-icons/fa";
 import { useDaySession } from "../contexts/DaySessionContext";
@@ -11,14 +11,58 @@ export default function Sidebar() {
     setSelectedDate,
     isDayStarted,
     loading: daySessionLoading,
+    resetSelectedDay,
+    isDayEnded,
   } = useDaySession();
+
+  // Stan magazynowy z dailyWarehouseReports
+  const [snapshot, setSnapshot] = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
+  const [activeOrders, setActiveOrders] = useState(0);
+  const [archivedOrders, setArchivedOrders] = useState(0);
+
+  React.useEffect(() => {
+    async function fetchSnapshot() {
+      setLoading(true);
+      const snapQ = collection(clientDb, "dailyWarehouseReports");
+      const snapDocs = await getDocs(snapQ);
+      const found = snapDocs.docs
+        .map((doc) => doc.data())
+        .find(
+          (snap) => snap.sessionDay === selectedDate && snap.type === "start"
+        );
+      setSnapshot(found ? found.snapshot : null);
+      setLoading(false);
+    }
+    fetchSnapshot();
+  }, [selectedDate]);
+
+  useEffect(() => {
+    const unsub = onSnapshot(collection(clientDb, "orders"), (snapshot) => {
+      let active = 0;
+      let archived = 0;
+      snapshot.docs.forEach((doc) => {
+        const data = doc.data();
+        if (data.isArchived) archived++;
+        else active++;
+      });
+      setActiveOrders(active);
+      setArchivedOrders(archived);
+    });
+    return () => unsub();
+  }, []);
 
   const navLinks = [
     { to: "/", label: "Pulpit" },
-    { to: "/orders", label: "Aktywne zamówienia" },
-    { to: "/history", label: "Historia" },
-    { to: "/new-order", label: "Stwórz zamówienie" },
-    { to: "/warehouse", label: "Stan magazynowy" },
+    { to: "/orders", label: "Aktywne zamówienia", blockedWhenDayEnded: true },
+    { to: "/history", label: "Historia", blockedWhenDayEnded: false },
+    { to: "/new-order", label: "Stwórz zamówienie", blockedWhenDayEnded: true },
+    { to: "/warehouse", label: "Stan magazynowy", blockedWhenDayEnded: false },
+    {
+      to: "/day-settings",
+      label: "Ustawienia dnia",
+      blockedWhenDayEnded: false,
+    },
   ];
 
   return (
@@ -41,19 +85,54 @@ export default function Sidebar() {
           <ul className="space-y-4">
             {navLinks.map((link, idx) => {
               const isDashboard = link.to === "/";
-              const isDisabled = !isDayStarted && !isDashboard;
+              const isDisabled =
+                (!isDayStarted && !isDashboard) ||
+                (isDayEnded && link.blockedWhenDayEnded);
+              // Badge logic
+              let badge = null;
+              if (link.to === "/orders" && activeOrders > 0) {
+                badge = (
+                  <span
+                    className="ml-2 flex items-center justify-center w-4 h-4 rounded-full bg-red-600 text-white font-bold"
+                    style={{
+                      minWidth: "18px",
+                      minHeight: "18px",
+                      fontSize: "0.85rem",
+                      lineHeight: "1",
+                      padding: 0,
+                    }}
+                  >
+                    {activeOrders}
+                  </span>
+                );
+              }
+              if (link.to === "/history" && archivedOrders > 0) {
+                badge = (
+                  <span
+                    className="ml-2 flex items-center justify-center w-4 h-4 rounded-full bg-gray-500 text-white font-bold"
+                    style={{
+                      minWidth: "18px",
+                      minHeight: "18px",
+                      fontSize: "0.85rem",
+                      lineHeight: "1",
+                      padding: 0,
+                    }}
+                  >
+                    {archivedOrders}
+                  </span>
+                );
+              }
               return (
-                <li key={link.to}>
+                <li key={link.to} className="relative">
                   <NavLink
                     to={link.to}
                     className={({ isActive }) =>
-                      `${
+                      `flex items-center px-4 py-2 rounded-lg transition-colors relative ${
                         isDisabled
-                          ? "flex items-center gap-2 px-4 py-2 rounded-lg text-gray-500 bg-gray-900 cursor-not-allowed opacity-60"
-                          : "flex items-center gap-2 px-4 py-2 rounded-lg transition-colors " +
-                            (isActive
-                              ? "bg-blue-700 text-white"
-                              : "text-gray-300 hover:bg-gray-700")
+                          ? "text-gray-500 bg-gray-900 cursor-not-allowed opacity-60"
+                          : isActive
+                          ? "bg-blue-700 text-white"
+                          : "text-gray-300 hover:bg-gray-700"
                       }`
                     }
                     tabIndex={isDisabled ? -1 : 0}
@@ -61,9 +140,13 @@ export default function Sidebar() {
                       if (isDisabled) e.preventDefault();
                     }}
                   >
-                    {link.icon}
-                    {link.label}
-                    {isDisabled && <FaLock className="ml-2" />}
+                    <span className="flex-1 flex items-center">
+                      {link.label}
+                      {badge}
+                    </span>
+                    {isDisabled && (
+                      <FaLock className="absolute right-4 top-1/2 -translate-y-1/2 text-lg" />
+                    )}
                   </NavLink>
                 </li>
               );
@@ -73,40 +156,7 @@ export default function Sidebar() {
       </div>
 
       {/* Stan magazynowy w pasku bocznym */}
-      <div className="mt-auto pt-8 border-t border-gray-700">
-        <NavLink to="/warehouse" className="block">
-          <h2 className="text-lg font-semibold text-white mb-4 hover:text-blue-400 transition-colors">
-            Stan magazynowy
-          </h2>
-          <div className="space-y-3">
-            {/* warehouseProducts.map((product) => (
-              <div
-                key={product.id}
-                className="flex justify-between items-center"
-              >
-                <div>
-                  <p className="text-sm text-gray-300">{product.name}</p>
-                  <p className="text-xs text-gray-400">
-                    {product.currentStock} {product.unit}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  {product.currentStock <= product.minStock && (
-                    <FaExclamationTriangle className="text-red-500" />
-                  )}
-                  <div
-                    className={`w-2 h-2 rounded-full ${
-                      product.currentStock <= product.minStock
-                        ? "bg-red-500"
-                        : "bg-green-500"
-                    }`}
-                  />
-                </div>
-              </div>
-            )) */}
-          </div>
-        </NavLink>
-      </div>
+      {/* Usunięto sekcję stanu magazynowego z paska bocznego na życzenie */}
     </aside>
   );
 }

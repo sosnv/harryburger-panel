@@ -116,7 +116,9 @@ export default function History() {
           ))}
         </div>
       ) : (
-        <p className="text-gray-400 text-center">Brak zamówień w historii.</p>
+        <div className="bg-[#1a1a1a] p-6 rounded-lg shadow text-center">
+          <p className="text-gray-400 text-lg">Brak zamówień w historii</p>
+        </div>
       )}
     </div>
   );

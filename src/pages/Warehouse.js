@@ -12,6 +12,7 @@ import {
 } from "firebase/firestore";
 import { clientDb } from "../firebaseClientConfig";
 import { useUser } from "../contexts/UserContext";
+import { useDaySession } from "../contexts/DaySessionContext";
 import {
   FaSearch,
   FaPlus,
@@ -25,11 +26,13 @@ import {
   FaPlusCircle,
   FaMinusCircle,
   FaComment,
+  FaLock,
 } from "react-icons/fa";
 import { toast } from "react-hot-toast";
 
 export default function Warehouse() {
   const { isManager } = useUser();
+  const { selectedDate } = useDaySession();
   const [products, setProducts] = useState([]);
   const [filteredProducts, setFilteredProducts] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
@@ -52,6 +55,9 @@ export default function Warehouse() {
     price: 0,
     isAvailable: true,
   });
+  const [snapshots, setSnapshots] = useState([]);
+  const [snapshotsLoading, setSnapshotsLoading] = useState(true);
+  const [activeSnapshotType, setActiveSnapshotType] = useState("start");
 
   const filterProducts = useCallback(() => {
     let filtered = products;
@@ -144,6 +150,20 @@ export default function Warehouse() {
   useEffect(() => {
     filterProducts();
   }, [filterProducts]);
+
+  useEffect(() => {
+    async function fetchSnapshots() {
+      setSnapshotsLoading(true);
+      const snapQ = collection(clientDb, "dailyWarehouseReports");
+      const snapDocs = await getDocs(snapQ);
+      const filtered = snapDocs.docs
+        .map((doc) => doc.data())
+        .filter((snap) => snap.sessionDay === selectedDate);
+      setSnapshots(filtered);
+      setSnapshotsLoading(false);
+    }
+    fetchSnapshots();
+  }, [selectedDate]);
 
   const validateProduct = (product) => {
     if (!product.name.trim()) {
@@ -343,6 +363,20 @@ export default function Warehouse() {
     "inne",
   ];
 
+  // Wybierz snapshot do wyświetlenia na podstawie aktywnego typu
+  const selectedSnapshot = React.useMemo(() => {
+    if (snapshots.length === 0) return null;
+    const snap = snapshots.find((s) => s.type === activeSnapshotType);
+    if (snap) return snap;
+    // fallback: jeśli nie ma wybranego typu, pokaż inny dostępny
+    return snapshots[0] || null;
+  }, [snapshots, activeSnapshotType]);
+
+  // Przygotuj produkty do wyświetlenia w tabeli na podstawie snapshotu
+  const snapshotProducts = selectedSnapshot
+    ? Object.values(selectedSnapshot.snapshot)
+    : [];
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -353,9 +387,51 @@ export default function Warehouse() {
 
   return (
     <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
+      {/* Data stanu magazynowego na górze */}
+      <div className="mb-4 flex items-center justify-between flex-wrap gap-2">
+        <span className="text-lg font-semibold text-blue-400">
+          Stan magazynowy na dzień: {selectedDate}
+        </span>
+        {selectedSnapshot && selectedSnapshot.timestamp && (
+          <span className="text-gray-400 text-sm ml-4">
+            {selectedSnapshot.type === "end"
+              ? "Stan na koniec dnia"
+              : "Stan na początek dnia"}{" "}
+            &middot; {selectedSnapshot.timestamp.toDate().toLocaleString()}
+          </span>
+        )}
+      </div>
+      <div className="flex justify-between items-center mb-6 flex-wrap gap-2">
         <h1 className="text-2xl font-bold text-white">Stan magazynowy</h1>
-        <div className="flex gap-4">
+        <div className="flex gap-4 items-center">
+          {/* Snapshot toggle buttons */}
+          <button
+            className={`px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${
+              activeSnapshotType === "start"
+                ? "bg-blue-600 text-white"
+                : "bg-gray-700 text-gray-300 hover:bg-blue-800"
+            }`}
+            disabled={!snapshots.some((s) => s.type === "start")}
+            onClick={() => setActiveSnapshotType("start")}
+          >
+            Stan początkowy
+          </button>
+          <button
+            className={`px-3 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2 ${
+              activeSnapshotType === "end"
+                ? "bg-green-600 text-white"
+                : snapshots.some((s) => s.type === "end")
+                ? "bg-gray-700 text-gray-300 hover:bg-green-800"
+                : "bg-gray-700 text-gray-400 cursor-not-allowed"
+            }`}
+            disabled={!snapshots.some((s) => s.type === "end")}
+            onClick={() => setActiveSnapshotType("end")}
+          >
+            {!snapshots.some((s) => s.type === "end") && (
+              <FaLock className="mr-1" />
+            )}
+            Stan końcowy
+          </button>
           <button
             onClick={handleExport}
             className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg flex items-center gap-2"
@@ -374,7 +450,7 @@ export default function Warehouse() {
         </div>
       </div>
 
-      {/* Filtry i wyszukiwarka */}
+      {/* Filtry i sortowanie nad tabelą snapshotu */}
       <div className="flex gap-4 mb-6 flex-wrap">
         <div className="relative flex-1 min-w-[200px]">
           <input
@@ -382,14 +458,14 @@ export default function Warehouse() {
             placeholder="Szukaj produktu..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full bg-gray-700 text-white px-4 py-2 rounded-lg pl-10"
+            className="w-full bg-gray-700 text-white px-4 py-2 rounded-lg pl-10 text-lg"
           />
           <FaSearch className="absolute left-3 top-3 text-gray-400" />
         </div>
         <select
           value={selectedCategory}
           onChange={(e) => setSelectedCategory(e.target.value)}
-          className="bg-gray-700 text-white px-4 py-2 rounded-lg"
+          className="bg-gray-700 text-white px-4 py-2 rounded-lg text-lg"
         >
           {categories.map((category) => (
             <option key={category} value={category}>
@@ -400,7 +476,7 @@ export default function Warehouse() {
         <select
           value={sortOption}
           onChange={(e) => setSortOption(e.target.value)}
-          className="bg-gray-700 text-white px-4 py-2 rounded-lg"
+          className="bg-gray-700 text-white px-4 py-2 rounded-lg text-lg"
         >
           <option value="name">Sortuj po nazwie</option>
           <option value="stock">Sortuj po stanie</option>
@@ -410,10 +486,112 @@ export default function Warehouse() {
           onClick={() =>
             setSortDirection((d) => (d === "asc" ? "desc" : "asc"))
           }
-          className="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg"
+          className="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-lg"
         >
           <FaSort className={sortDirection === "asc" ? "rotate-180" : ""} />
         </button>
+      </div>
+      {/* Tabela snapshotu */}
+      {snapshotsLoading ? (
+        <div className="text-gray-400 mb-8">Ładowanie...</div>
+      ) : !selectedSnapshot ? (
+        <div className="text-gray-500 italic mb-8">
+          Brak zapisanego stanu magazynowego dla wybranego dnia.
+        </div>
+      ) : (
+        <>
+          <table className="w-full text-base text-gray-300 bg-[#23232a] rounded-lg overflow-hidden shadow-lg mb-4">
+            <thead>
+              <tr className="bg-[#23232a]">
+                <th className="px-3 py-2 text-left font-bold text-white">
+                  Produkt
+                </th>
+                <th className="px-3 py-2 text-left font-bold text-white">
+                  Ilość
+                </th>
+                <th className="px-3 py-2 text-left font-bold text-white">
+                  Jednostka
+                </th>
+                <th className="px-3 py-2 text-center font-bold text-white">
+                  Stan
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {snapshotProducts
+                .filter(
+                  (prod) =>
+                    (!searchTerm ||
+                      prod.name
+                        .toLowerCase()
+                        .includes(searchTerm.toLowerCase())) &&
+                    (selectedCategory === "all" ||
+                      prod.category === selectedCategory)
+                )
+                .sort((a, b) => {
+                  let comparison = 0;
+                  switch (sortOption) {
+                    case "name":
+                      comparison = a.name.localeCompare(b.name);
+                      break;
+                    case "stock":
+                      comparison = a.quantity - b.quantity;
+                      break;
+                    default:
+                      comparison = 0;
+                  }
+                  return sortDirection === "asc" ? comparison : -comparison;
+                })
+                .map((prod, i) => {
+                  const minStock = prod.minStock ?? 1;
+                  let diodeColor = "bg-green-500";
+                  if (prod.quantity === 0) {
+                    diodeColor = "bg-red-500";
+                  } else if (prod.quantity <= 2 * minStock) {
+                    diodeColor = "bg-yellow-400";
+                  }
+                  return (
+                    <tr
+                      key={i}
+                      className="border-b border-gray-700 last:border-0 hover:bg-[#222228] transition"
+                    >
+                      <td className="px-3 py-2 font-semibold text-white">
+                        {prod.name}
+                      </td>
+                      <td className="px-3 py-2 font-bold text-blue-400">
+                        {prod.quantity}
+                      </td>
+                      <td className="px-3 py-2">{prod.unit}</td>
+                      <td className="px-3 py-2 text-center">
+                        <span
+                          className={`inline-block w-5 h-5 rounded-full ${diodeColor} border-2 border-gray-700`}
+                        ></span>
+                      </td>
+                    </tr>
+                  );
+                })}
+            </tbody>
+          </table>
+          {/* Legenda diod */}
+          <div className="flex items-center gap-6 mb-8">
+            <div className="flex items-center gap-2">
+              <span className="inline-block w-4 h-4 rounded-full bg-green-500 border-2 border-gray-700"></span>
+              <span className="text-gray-300 text-sm">Dużo zapasu</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="inline-block w-4 h-4 rounded-full bg-yellow-400 border-2 border-gray-700"></span>
+              <span className="text-gray-300 text-sm">Resztki</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="inline-block w-4 h-4 rounded-full bg-red-500 border-2 border-gray-700"></span>
+              <span className="text-gray-300 text-sm">Brak</span>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Filtry i wyszukiwarka */}
+      <div className="flex gap-4 mb-6 flex-wrap">
         <label className="flex items-center gap-2 text-white">
           <input
             type="checkbox"

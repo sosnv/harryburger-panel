@@ -10,6 +10,7 @@ import History from "./pages/History";
 import NewOrder from "./pages/NewOrder";
 import Warehouse from "./pages/Warehouse";
 import DayControlDashboard from "./pages/DayControlDashboard";
+import DaySettings from "./pages/DaySettings";
 
 export default function App() {
   return (
@@ -26,6 +27,7 @@ export default function App() {
                 <Route path="/new-order" element={<NewOrder />} />
                 <Route path="/warehouse" element={<Warehouse />} />
                 <Route path="/day-control" element={<DayControlDashboard />} />
+                <Route path="/day-settings" element={<DaySettings />} />
               </Routes>
             </main>
           </div>
