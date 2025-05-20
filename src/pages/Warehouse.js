@@ -27,6 +27,7 @@ import {
   FaMinusCircle,
   FaComment,
   FaLock,
+  FaSave,
 } from "react-icons/fa";
 import { toast } from "react-hot-toast";
 
@@ -46,6 +47,8 @@ export default function Warehouse() {
   const [sortDirection, setSortDirection] = useState("asc");
   const [showUnavailable, setShowUnavailable] = useState(false);
   const [reportComment, setReportComment] = useState("");
+  const [editingProduct, setEditingProduct] = useState(null);
+  const [editValue, setEditValue] = useState("");
   const [newProduct, setNewProduct] = useState({
     name: "",
     category: "",
@@ -57,7 +60,7 @@ export default function Warehouse() {
   });
   const [snapshots, setSnapshots] = useState([]);
   const [snapshotsLoading, setSnapshotsLoading] = useState(true);
-  const [activeSnapshotType, setActiveSnapshotType] = useState("start");
+  const [expandedSnapshots, setExpandedSnapshots] = useState([]);
 
   const filterProducts = useCallback(() => {
     let filtered = products;
@@ -164,6 +167,18 @@ export default function Warehouse() {
     }
     fetchSnapshots();
   }, [selectedDate]);
+
+  const toggleSnapshot = (idx) => {
+    setExpandedSnapshots((prev) =>
+      prev.includes(idx) ? prev.filter((i) => i !== idx) : [...prev, idx]
+    );
+  };
+
+  useEffect(() => {
+    if (snapshots.length > 0) {
+      setExpandedSnapshots([...Array(snapshots.length).keys()]);
+    }
+  }, [snapshots]);
 
   const validateProduct = (product) => {
     if (!product.name.trim()) {
@@ -363,19 +378,46 @@ export default function Warehouse() {
     "inne",
   ];
 
-  // Wybierz snapshot do wyświetlenia na podstawie aktywnego typu
-  const selectedSnapshot = React.useMemo(() => {
-    if (snapshots.length === 0) return null;
-    const snap = snapshots.find((s) => s.type === activeSnapshotType);
-    if (snap) return snap;
-    // fallback: jeśli nie ma wybranego typu, pokaż inny dostępny
-    return snapshots[0] || null;
-  }, [snapshots, activeSnapshotType]);
+  const handleEditClick = (product) => {
+    setEditingProduct(product);
+    setEditValue(product.currentStock.toString());
+  };
 
-  // Przygotuj produkty do wyświetlenia w tabeli na podstawie snapshotu
-  const snapshotProducts = selectedSnapshot
-    ? Object.values(selectedSnapshot.snapshot)
-    : [];
+  const handleEditSave = async () => {
+    if (!editingProduct) return;
+
+    const newValue = parseFloat(editValue);
+    if (isNaN(newValue)) {
+      toast.error("Wprowadź poprawną wartość liczbową");
+      return;
+    }
+
+    try {
+      const productRef = doc(clientDb, "warehouseProducts", editingProduct.id);
+      await updateDoc(productRef, {
+        currentStock: newValue,
+        lastUpdated: serverTimestamp(),
+      });
+
+      setProducts(
+        products.map((p) =>
+          p.id === editingProduct.id ? { ...p, currentStock: newValue } : p
+        )
+      );
+
+      toast.success("Stan magazynowy zaktualizowany");
+      setEditingProduct(null);
+      setEditValue("");
+    } catch (error) {
+      console.error("Błąd podczas aktualizacji stanu magazynowego:", error);
+      toast.error("Wystąpił błąd podczas aktualizacji stanu magazynowego");
+    }
+  };
+
+  const handleEditCancel = () => {
+    setEditingProduct(null);
+    setEditValue("");
+  };
 
   if (isLoading) {
     return (
@@ -392,46 +434,10 @@ export default function Warehouse() {
         <span className="text-lg font-semibold text-blue-400">
           Stan magazynowy na dzień: {selectedDate}
         </span>
-        {selectedSnapshot && selectedSnapshot.timestamp && (
-          <span className="text-gray-400 text-sm ml-4">
-            {selectedSnapshot.type === "end"
-              ? "Stan na koniec dnia"
-              : "Stan na początek dnia"}{" "}
-            &middot; {selectedSnapshot.timestamp.toDate().toLocaleString()}
-          </span>
-        )}
       </div>
       <div className="flex justify-between items-center mb-6 flex-wrap gap-2">
         <h1 className="text-2xl font-bold text-white">Stan magazynowy</h1>
         <div className="flex gap-4 items-center">
-          {/* Snapshot toggle buttons */}
-          <button
-            className={`px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${
-              activeSnapshotType === "start"
-                ? "bg-blue-600 text-white"
-                : "bg-gray-700 text-gray-300 hover:bg-blue-800"
-            }`}
-            disabled={!snapshots.some((s) => s.type === "start")}
-            onClick={() => setActiveSnapshotType("start")}
-          >
-            Stan początkowy
-          </button>
-          <button
-            className={`px-3 py-2 rounded-lg text-sm font-semibold transition-colors flex items-center gap-2 ${
-              activeSnapshotType === "end"
-                ? "bg-green-600 text-white"
-                : snapshots.some((s) => s.type === "end")
-                ? "bg-gray-700 text-gray-300 hover:bg-green-800"
-                : "bg-gray-700 text-gray-400 cursor-not-allowed"
-            }`}
-            disabled={!snapshots.some((s) => s.type === "end")}
-            onClick={() => setActiveSnapshotType("end")}
-          >
-            {!snapshots.some((s) => s.type === "end") && (
-              <FaLock className="mr-1" />
-            )}
-            Stan końcowy
-          </button>
           <button
             onClick={handleExport}
             className="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg flex items-center gap-2"
@@ -491,89 +497,135 @@ export default function Warehouse() {
           <FaSort className={sortDirection === "asc" ? "rotate-180" : ""} />
         </button>
       </div>
-      {/* Tabela snapshotu */}
+
+      {/* Lista stanów magazynowych (początkowy i końcowy) */}
       {snapshotsLoading ? (
-        <div className="text-gray-400 mb-8">Ładowanie...</div>
-      ) : !selectedSnapshot ? (
+        <div className="text-gray-400 mb-8">
+          Ładowanie stanów magazynowych...
+        </div>
+      ) : snapshots.length === 0 ? (
         <div className="text-gray-500 italic mb-8">
           Brak zapisanego stanu magazynowego dla wybranego dnia.
         </div>
       ) : (
-        <>
-          <table className="w-full text-base text-gray-300 bg-[#23232a] rounded-lg overflow-hidden shadow-lg mb-4">
-            <thead>
-              <tr className="bg-[#23232a]">
-                <th className="px-3 py-2 text-left font-bold text-white">
-                  Produkt
-                </th>
-                <th className="px-3 py-2 text-left font-bold text-white">
-                  Ilość
-                </th>
-                <th className="px-3 py-2 text-left font-bold text-white">
-                  Jednostka
-                </th>
-                <th className="px-3 py-2 text-center font-bold text-white">
-                  Stan
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {snapshotProducts
-                .filter(
-                  (prod) =>
-                    (!searchTerm ||
-                      prod.name
-                        .toLowerCase()
-                        .includes(searchTerm.toLowerCase())) &&
-                    (selectedCategory === "all" ||
-                      prod.category === selectedCategory)
-                )
-                .sort((a, b) => {
-                  let comparison = 0;
-                  switch (sortOption) {
-                    case "name":
-                      comparison = a.name.localeCompare(b.name);
-                      break;
-                    case "stock":
-                      comparison = a.quantity - b.quantity;
-                      break;
-                    default:
-                      comparison = 0;
-                  }
-                  return sortDirection === "asc" ? comparison : -comparison;
-                })
-                .map((prod, i) => {
-                  const minStock = prod.minStock ?? 1;
-                  let diodeColor = "bg-green-500";
-                  if (prod.quantity === 0) {
-                    diodeColor = "bg-red-500";
-                  } else if (prod.quantity <= 2 * minStock) {
-                    diodeColor = "bg-yellow-400";
-                  }
-                  return (
-                    <tr
-                      key={i}
-                      className="border-b border-gray-700 last:border-0 hover:bg-[#222228] transition"
-                    >
-                      <td className="px-3 py-2 font-semibold text-white">
-                        {prod.name}
-                      </td>
-                      <td className="px-3 py-2 font-bold text-blue-400">
-                        {prod.quantity}
-                      </td>
-                      <td className="px-3 py-2">{prod.unit}</td>
-                      <td className="px-3 py-2 text-center">
-                        <span
-                          className={`inline-block w-5 h-5 rounded-full ${diodeColor} border-2 border-gray-700`}
-                        ></span>
-                      </td>
-                    </tr>
-                  );
-                })}
-            </tbody>
-          </table>
+        <div className="mb-8">
+          <h2 className="text-xl font-bold text-white mb-4">
+            Stany magazynowe dnia
+          </h2>
+
+          {snapshots
+            .slice()
+            .sort((a, b) => b.timestamp?.seconds - a.timestamp?.seconds)
+            .map((snap, idx) => (
+              <div
+                key={idx}
+                className="mb-6 bg-[#23232a] rounded-lg overflow-hidden shadow-lg"
+              >
+                <div
+                  className="px-4 py-3 bg-gray-800 flex justify-between items-center cursor-pointer"
+                  onClick={() => toggleSnapshot(idx)}
+                >
+                  <span className="font-semibold text-white text-lg">
+                    {snap.type === "start"
+                      ? "Stan początkowy"
+                      : snap.type === "end"
+                      ? "Stan końcowy"
+                      : snap.comment || "Stan magazynowy"}
+                  </span>
+                  <div className="flex items-center">
+                    <span className="text-gray-400 text-sm mr-4">
+                      {snap.timestamp?.toDate().toLocaleString()}
+                    </span>
+                    <span className="text-blue-400">
+                      {expandedSnapshots.includes(idx) ? "▲" : "▼"}
+                    </span>
+                  </div>
+                </div>
+
+                {expandedSnapshots.includes(idx) && (
+                  <div className="p-4">
+                    <table className="w-full text-base text-gray-300">
+                      <thead>
+                        <tr>
+                          <th className="px-3 py-2 text-left font-bold text-white">
+                            Produkt
+                          </th>
+                          <th className="px-3 py-2 text-left font-bold text-white">
+                            Ilość
+                          </th>
+                          <th className="px-3 py-2 text-left font-bold text-white">
+                            Jednostka
+                          </th>
+                          <th className="px-3 py-2 text-center font-bold text-white">
+                            Stan
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {Object.values(snap.snapshot || {})
+                          .filter(
+                            (prod) =>
+                              (!searchTerm ||
+                                prod.name
+                                  .toLowerCase()
+                                  .includes(searchTerm.toLowerCase())) &&
+                              (selectedCategory === "all" ||
+                                prod.category === selectedCategory)
+                          )
+                          .sort((a, b) => {
+                            let comparison = 0;
+                            switch (sortOption) {
+                              case "name":
+                                comparison = a.name.localeCompare(b.name);
+                                break;
+                              case "stock":
+                                comparison = a.quantity - b.quantity;
+                                break;
+                              default:
+                                comparison = 0;
+                            }
+                            return sortDirection === "asc"
+                              ? comparison
+                              : -comparison;
+                          })
+                          .map((prod, i) => {
+                            const minStock = prod.minStock ?? 1;
+                            let diodeColor = "bg-green-500";
+                            if (prod.quantity === 0) {
+                              diodeColor = "bg-red-500";
+                            } else if (prod.quantity <= 2 * minStock) {
+                              diodeColor = "bg-yellow-400";
+                            }
+
+                            return (
+                              <tr
+                                key={i}
+                                className="border-b border-gray-700 last:border-0 hover:bg-[#222228] transition"
+                              >
+                                <td className="px-3 py-2 font-semibold text-white">
+                                  {prod.name}
+                                </td>
+                                <td className="px-3 py-2 font-bold text-blue-400">
+                                  {prod.quantity}
+                                </td>
+                                <td className="px-3 py-2">{prod.unit}</td>
+                                <td className="px-3 py-2 text-center">
+                                  <span
+                                    className={`inline-block w-5 h-5 rounded-full ${diodeColor} border-2 border-gray-700`}
+                                  ></span>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            ))}
+
           {/* Legenda diod */}
-          <div className="flex items-center gap-6 mb-8">
+          <div className="flex items-center gap-6 mb-4 mt-2">
             <div className="flex items-center gap-2">
               <span className="inline-block w-4 h-4 rounded-full bg-green-500 border-2 border-gray-700"></span>
               <span className="text-gray-300 text-sm">Dużo zapasu</span>
@@ -587,7 +639,7 @@ export default function Warehouse() {
               <span className="text-gray-300 text-sm">Brak</span>
             </div>
           </div>
-        </>
+        </div>
       )}
 
       {/* Filtry i wyszukiwarka */}
@@ -640,41 +692,91 @@ export default function Warehouse() {
               <div className="flex justify-between items-center mb-2">
                 <span className="text-gray-400">Stan:</span>
                 <div className="flex items-center gap-2">
-                  {isManager && (
+                  {editingProduct?.id === product.id ? (
                     <>
+                      <input
+                        type="number"
+                        value={editValue}
+                        onChange={(e) => setEditValue(e.target.value)}
+                        className="w-20 bg-gray-700 text-white px-2 py-1 rounded"
+                        autoFocus
+                      />
                       <button
-                        onClick={() => handleQuickUpdate(product.id, -1)}
-                        className="text-gray-400 hover:text-white"
+                        onClick={async () => {
+                          const stockValue = parseInt(editValue);
+                          if (isNaN(stockValue) || stockValue < 0) {
+                            toast.error(
+                              "Nieprawidłowa wartość stanu magazynowego"
+                            );
+                            return;
+                          }
+                          try {
+                            setIsLoading(true);
+                            const productRef = doc(
+                              clientDb,
+                              "warehouse",
+                              product.id
+                            );
+                            await updateDoc(productRef, {
+                              currentStock: stockValue,
+                              history: [
+                                ...(product.history || []),
+                                {
+                                  type: "update",
+                                  quantity: stockValue,
+                                  timestamp: serverTimestamp(),
+                                  updatedBy: "manager",
+                                },
+                              ],
+                            });
+                            toast.success("Stan magazynowy zaktualizowany");
+                            setEditingProduct(null);
+                            setEditValue("");
+                          } catch (error) {
+                            console.error("Error updating stock:", error);
+                            toast.error("Błąd podczas aktualizacji stanu");
+                          } finally {
+                            setIsLoading(false);
+                          }
+                        }}
+                        className="text-green-500 hover:text-green-400"
                       >
-                        <FaMinusCircle />
+                        <FaSave />
                       </button>
+                      <button
+                        onClick={() => {
+                          setEditingProduct(null);
+                          setEditValue("");
+                        }}
+                        className="text-red-500 hover:text-red-400"
+                      >
+                        <FaTrash />
+                      </button>
+                    </>
+                  ) : (
+                    <>
                       <span
-                        className={`font-semibold ${
-                          product.currentStock <= product.minStock
-                            ? "text-red-500"
-                            : "text-white"
+                        className={`text-${
+                          product.currentStock < product.minStock
+                            ? "red"
+                            : "white"
                         }`}
                       >
                         {product.currentStock}
                       </span>
-                      <button
-                        onClick={() => handleQuickUpdate(product.id, 1)}
-                        className="text-gray-400 hover:text-white"
-                      >
-                        <FaPlusCircle />
-                      </button>
+                      {isManager && (
+                        <button
+                          onClick={() => {
+                            setEditingProduct({ id: product.id });
+                            setEditValue(product.currentStock.toString());
+                          }}
+                          className="text-blue-500 hover:text-blue-400"
+                          title="Edytuj ilość"
+                        >
+                          <FaEdit />
+                        </button>
+                      )}
                     </>
-                  )}
-                  {!isManager && (
-                    <span
-                      className={`font-semibold ${
-                        product.currentStock <= product.minStock
-                          ? "text-red-500"
-                          : "text-white"
-                      }`}
-                    >
-                      {product.currentStock}
-                    </span>
                   )}
                   <span className="text-gray-400 ml-1">{product.unit}</span>
                 </div>
@@ -703,34 +805,19 @@ export default function Warehouse() {
               >
                 <FaHistory className="inline mr-1" /> Historia
               </button>
-              {isManager ? (
-                <button
-                  onClick={() => {
-                    const newStock = prompt(
-                      "Podaj nowy stan magazynowy:",
-                      product.currentStock
-                    );
-                    if (newStock !== null) {
-                      handleUpdateStock(product.id, newStock);
-                    }
-                  }}
-                  className="flex-1 bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded"
-                >
-                  <FaEdit className="inline mr-1" /> Aktualizuj
-                </button>
-              ) : (
-                product.currentStock <= product.minStock && (
-                  <button
-                    onClick={() => {
-                      setSelectedProduct(product);
-                      setShowReportModal(true);
-                    }}
-                    className="flex-1 bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded"
-                  >
-                    <FaComment className="inline mr-1" /> Zgłoś brak
-                  </button>
-                )
-              )}
+              {isManager
+                ? null
+                : product.currentStock <= product.minStock && (
+                    <button
+                      onClick={() => {
+                        setSelectedProduct(product);
+                        setShowReportModal(true);
+                      }}
+                      className="flex-1 bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded"
+                    >
+                      <FaComment className="inline mr-1" /> Zgłoś brak
+                    </button>
+                  )}
             </div>
           </div>
         ))}

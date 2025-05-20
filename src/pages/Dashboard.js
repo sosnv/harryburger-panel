@@ -15,7 +15,42 @@ import { useDaySession } from "../contexts/DaySessionContext";
 import WarehouseSnapshotModal from "../components/WarehouseSnapshotModal";
 import { toast } from "react-hot-toast";
 import jsPDF from "jspdf";
+import "jspdf-autotable";
 import { FaLock } from "react-icons/fa";
+import burgers from "../data/burgers";
+import extras from "../data/extras";
+import drinks from "../data/drinks";
+import ufoBurgers from "../data/ufo-burgers";
+
+// Funkcja zamieniająca polskie znaki na łacińskie odpowiedniki
+function removePolishChars(str) {
+  if (!str) return str;
+  return str
+    .replace(/ą/g, "a")
+    .replace(/ć/g, "c")
+    .replace(/ę/g, "e")
+    .replace(/ł/g, "l")
+    .replace(/ń/g, "n")
+    .replace(/ó/g, "o")
+    .replace(/ś/g, "s")
+    .replace(/ź/g, "z")
+    .replace(/ż/g, "z")
+    .replace(/Ą/g, "A")
+    .replace(/Ć/g, "C")
+    .replace(/Ę/g, "E")
+    .replace(/Ł/g, "L")
+    .replace(/Ń/g, "N")
+    .replace(/Ó/g, "O")
+    .replace(/Ś/g, "S")
+    .replace(/Ź/g, "Z")
+    .replace(/Ż/g, "Z");
+}
+
+// Helper to remove Polish chars and replace 'zł' with 'zl'
+function cleanText(str) {
+  if (!str) return str;
+  return removePolishChars(str).replace(/zł/g, "zl").replace(/ZŁ/g, "ZL");
+}
 
 export default function Dashboard() {
   const [aktywnych, setAktywnych] = useState(0);
@@ -105,7 +140,7 @@ export default function Dashboard() {
     try {
       await setDoc(doc(collection(clientDb, "dailyWarehouseReports")), {
         sessionDay: selectedDate,
-        type: "start",
+        type: snapshotType,
         snapshot: snapshotData,
         timestamp: serverTimestamp(),
       });
@@ -153,42 +188,429 @@ export default function Dashboard() {
   const handleGeneratePDF = async () => {
     setGeneratingPDF(true);
     try {
-      // Fetch warehouse snapshot (start/end) and orders for the day
+      // Fetch warehouse snapshots (start/end)
       const snapQ = collection(clientDb, "dailyWarehouseReports");
       const snapDocs = await getDocs(snapQ);
       const snapshots = snapDocs.docs
         .map((doc) => doc.data())
         .filter((snap) => snap.sessionDay === selectedDate);
-      const endSnap = snapshots.find((s) => s.type === "end");
       const startSnap = snapshots.find((s) => s.type === "start");
-      const warehouseSnap = endSnap || startSnap;
+      const endSnap = snapshots.find((s) => s.type === "end");
+
+      // Fetch orders for the day
       const ordersQ = collection(clientDb, "orders");
       const ordersDocs = await getDocs(ordersQ);
       const orders = ordersDocs.docs
-        .map((doc) => doc.data())
+        .map((doc) => ({ id: doc.id, ...doc.data() }))
         .filter((order) => {
           if (!order.timestamp) return false;
           const date = order.timestamp.toDate().toISOString().split("T")[0];
           return date === selectedDate;
         });
-      // Generate PDF
-      const doc = new jsPDF();
-      doc.setFontSize(18);
-      doc.text(`Raport dnia: ${selectedDate}`, 10, 15);
-      doc.setFontSize(12);
-      doc.text(`Liczba zamówień: ${orders.length}`, 10, 30);
-      let y = 40;
-      if (warehouseSnap) {
-        doc.text("Stan magazynowy:", 10, y);
-        y += 7;
-        Object.values(warehouseSnap.snapshot).forEach((prod) => {
-          doc.text(`${prod.name}: ${prod.quantity} ${prod.unit}`, 14, y);
-          y += 6;
+
+      // Calculate sales summary by category
+      const categorySales = {
+        burger: { quantity: 0, revenue: 0 },
+        ufo: { quantity: 0, revenue: 0 },
+        extra: { quantity: 0, revenue: 0 },
+        drink: { quantity: 0, revenue: 0 },
+      };
+
+      // Calculate payment methods summary
+      const paymentMethods = {
+        cash: 0,
+        card: 0,
+        blik: 0,
+      };
+
+      // Calculate total revenue
+      let totalRevenue = 0;
+
+      // Calculate product sales
+      const salesSummary = {};
+
+      orders.forEach((order) => {
+        if (!order.items) return;
+
+        // Calculate order total
+        const orderTotal = order.items.reduce(
+          (sum, item) => sum + (item.price || 0) * (item.qty || 0),
+          0
+        );
+
+        // Add to payment method
+        if (order.paymentMethod === "cash") {
+          paymentMethods.cash += orderTotal;
+        } else if (order.paymentMethod === "card") {
+          paymentMethods.card += orderTotal;
+        } else if (order.paymentMethod === "blik") {
+          paymentMethods.blik += orderTotal;
+        }
+
+        // Process items
+        order.items.forEach((item) => {
+          if (!item.name || !item.qty || !item.price) return;
+
+          // Add to product sales summary
+          if (!salesSummary[item.name]) {
+            salesSummary[item.name] = {
+              quantity: 0,
+              revenue: 0,
+              unit: item.unit || "szt",
+              category: item.category,
+            };
+          }
+          salesSummary[item.name].quantity += item.qty;
+          salesSummary[item.name].revenue += item.price * item.qty;
+
+          // Add to category sales
+          const category = getItemCategory(item.name);
+          if (categorySales[category]) {
+            categorySales[category].quantity += item.qty;
+            categorySales[category].revenue += item.price * item.qty;
+          }
+
+          // Add to total revenue
+          totalRevenue += item.price * item.qty;
+        });
+      });
+
+      // Helper function to determine item category
+      function getItemCategory(itemName) {
+        // Find the product in our products array
+        const product = [...burgers, ...extras, ...drinks, ...ufoBurgers].find(
+          (p) => p.name === itemName
+        );
+
+        if (!product) return "other";
+
+        if (burgers.some((b) => b.name === itemName)) return "burger";
+        if (ufoBurgers.some((b) => b.name === itemName)) return "ufo";
+        if (extras.some((e) => e.name === itemName)) return "extra";
+        if (drinks.some((d) => d.name === itemName)) return "drink";
+
+        return "other";
+      }
+
+      // Helper function to format units
+      function formatUnit(quantity, unit) {
+        if (!unit) return `${quantity}`;
+        const unitMap = {
+          szt: "szt.",
+          kg: "kg",
+          l: "l",
+          g: "g",
+          ml: "ml",
+          op: "op.",
+          paczka: "op.",
+          paczki: "op.",
+          sztuki: "szt.",
+          sztuka: "szt.",
+          litr: "l",
+          litry: "l",
+          gram: "g",
+          gramy: "g",
+          mililitr: "ml",
+          mililitry: "ml",
+        };
+        const standardizedUnit = unitMap[unit.toLowerCase()] || unit;
+        if (standardizedUnit === "kg" || standardizedUnit === "l") {
+          return `${quantity.toFixed(2)} ${standardizedUnit}`;
+        } else if (standardizedUnit === "g" || standardizedUnit === "ml") {
+          if (quantity >= 1000) {
+            return `${(quantity / 1000).toFixed(2)} ${
+              standardizedUnit === "g" ? "kg" : "l"
+            }`;
+          }
+          return `${Math.round(quantity)} ${standardizedUnit}`;
+        }
+        return `${Math.round(quantity)} ${standardizedUnit}`;
+      }
+
+      // Użyj globalnej wersji jsPDF dostępnej z CDN, jeśli istnieje (na produkcji)
+      // W przeciwnym razie użyj lokalnie importowanej wersji (podczas developmentu)
+      let doc;
+      if (window.jspdf && window.jspdf.jsPDF) {
+        // Wersja z CDN (na produkcji)
+        doc = new window.jspdf.jsPDF({
+          orientation: "portrait",
+          unit: "mm",
+          format: "a4",
+        });
+      } else {
+        // Wersja z importu (dla developmentu)
+        doc = new jsPDF({
+          orientation: "portrait",
+          unit: "mm",
+          format: "a4",
         });
       }
+
+      // Add font support for Polish characters
+      // doc.setFont("DejaVu"); // Usuwam to, bo nie używamy tej czcionki
+      doc.setFontSize(20);
+      doc.text(cleanText(`Raport dzienny: ${selectedDate}`), 15, 20);
+
+      // 1. Orders Summary
+      doc.setFontSize(14);
+      doc.text(cleanText("Podsumowanie zamówień"), 15, 35);
+
+      // Total revenue
+      doc.setFontSize(12);
+      doc.text(
+        cleanText(`Końcowa suma zamówień: ${totalRevenue.toFixed(2)} zł`),
+        15,
+        45
+      );
+
+      // Category summary
+      doc.setFontSize(12);
+      doc.text(cleanText("Suma według kategorii:"), 15, 55);
+
+      const categoryHeaders = [
+        cleanText("Kategoria"),
+        cleanText("Ilość"),
+        cleanText("Wartość"),
+      ];
+      const categoryRows = [
+        [
+          cleanText("Burgery"),
+          categorySales.burger.quantity.toString(),
+          cleanText(`${categorySales.burger.revenue.toFixed(2)} zł`),
+        ],
+        [
+          cleanText("UFO Burgery"),
+          categorySales.ufo.quantity.toString(),
+          cleanText(`${categorySales.ufo.revenue.toFixed(2)} zł`),
+        ],
+        [
+          cleanText("Dodatki"),
+          categorySales.extra.quantity.toString(),
+          cleanText(`${categorySales.extra.revenue.toFixed(2)} zł`),
+        ],
+        [
+          cleanText("Napoje"),
+          categorySales.drink.quantity.toString(),
+          cleanText(`${categorySales.drink.revenue.toFixed(2)} zł`),
+        ],
+        [cleanText("SUMA"), "", cleanText(`${totalRevenue.toFixed(2)} zł`)],
+      ];
+
+      doc.autoTable({
+        head: [categoryHeaders],
+        body: categoryRows,
+        startY: 60,
+        styles: { fontSize: 10 },
+        headStyles: { fillColor: [64, 64, 64] },
+        theme: "grid",
+      });
+
+      // Payment methods
+      doc.setFontSize(12);
+      doc.text(
+        cleanText("Metody płatności:"),
+        15,
+        doc.lastAutoTable.finalY + 15
+      );
+
+      const paymentHeaders = [cleanText("Metoda"), cleanText("Wartość")];
+      const paymentRows = [
+        [
+          cleanText("Gotówka"),
+          cleanText(`${paymentMethods.cash.toFixed(2)} zł`),
+        ],
+        [cleanText("Karta"), cleanText(`${paymentMethods.card.toFixed(2)} zł`)],
+        [cleanText("BLIK"), cleanText(`${paymentMethods.blik.toFixed(2)} zł`)],
+        [
+          cleanText("SUMA"),
+          cleanText(
+            `${(
+              paymentMethods.cash +
+              paymentMethods.card +
+              paymentMethods.blik
+            ).toFixed(2)} zł`
+          ),
+        ],
+      ];
+
+      doc.autoTable({
+        head: [paymentHeaders],
+        body: paymentRows,
+        startY: doc.lastAutoTable.finalY + 20,
+        styles: { fontSize: 10 },
+        headStyles: { fillColor: [64, 64, 64] },
+        theme: "grid",
+      });
+
+      // 2. Orders List
+      doc.setFontSize(14);
+      doc.text(cleanText("Lista zamówień"), 15, doc.lastAutoTable.finalY + 15);
+
+      const orderHeaders = [
+        cleanText("Nr"),
+        cleanText("Godzina"),
+        cleanText("Status"),
+        cleanText("Wartość"),
+        cleanText("Metoda"),
+      ];
+      const orderRows = orders.map((order, idx) => {
+        const orderTotal = order.items
+          ? order.items.reduce(
+              (sum, item) => sum + (item.price || 0) * (item.qty || 0),
+              0
+            )
+          : 0;
+        return [
+          (order.orderNumber || idx + 1).toString(),
+          order.timestamp?.toDate().toLocaleTimeString() || "",
+          cleanText(order.isArchived ? "Zakończone" : "Aktywne"),
+          cleanText(orderTotal.toFixed(2) + " zł"),
+          cleanText(order.paymentMethod || ""),
+        ];
+      });
+
+      doc.autoTable({
+        head: [orderHeaders],
+        body: orderRows,
+        startY: doc.lastAutoTable.finalY + 20,
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [64, 64, 64] },
+        theme: "grid",
+      });
+
+      // 3. Warehouse State Comparison
+      doc.setFontSize(14);
+      doc.text(
+        cleanText("Stan magazynowy - porównanie"),
+        15,
+        doc.lastAutoTable.finalY + 15
+      );
+
+      // Combine all products from both snapshots
+      const allProducts = new Set();
+      for (const productId in startSnap?.snapshot || {}) {
+        allProducts.add(productId);
+      }
+      for (const productId in endSnap?.snapshot || {}) {
+        allProducts.add(productId);
+      }
+
+      const warehouseHeaders = [
+        cleanText("Produkt"),
+        cleanText("Stan początkowy"),
+        cleanText("Stan końcowy"),
+        cleanText("Różnica"),
+      ];
+      const warehouseRows = Array.from(allProducts).map((productId) => {
+        const startProduct = startSnap?.snapshot?.[productId] || {};
+        const endProduct = endSnap?.snapshot?.[productId] || {};
+        const startQty = startProduct.quantity || 0;
+        const endQty = endProduct.quantity || 0;
+        const diff = endQty - startQty;
+        const unit = startProduct.unit || endProduct.unit || "szt";
+        const name = startProduct.name || endProduct.name || productId;
+        return [
+          cleanText(name),
+          cleanText(formatUnit(startQty, unit)),
+          cleanText(formatUnit(endQty, unit)),
+          cleanText(formatUnit(diff, unit)),
+        ];
+      });
+
+      doc.autoTable({
+        head: [warehouseHeaders],
+        body: warehouseRows,
+        startY: doc.lastAutoTable.finalY + 20,
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [64, 64, 64] },
+        theme: "grid",
+        columnStyles: {
+          0: { cellWidth: 60 },
+          1: { cellWidth: 40, halign: "right" },
+          2: { cellWidth: 40, halign: "right" },
+          3: { cellWidth: 40, halign: "right" },
+        },
+      });
+
+      // Add a new page if needed
+      if (doc.lastAutoTable.finalY > doc.internal.pageSize.height - 40) {
+        doc.addPage();
+      }
+
+      // 4. Inventory summary - used vs available
+      doc.setFontSize(14);
+      doc.text(
+        cleanText("Podsumowanie magazynu"),
+        15,
+        doc.lastAutoTable.finalY + 15
+      );
+
+      doc.setFontSize(10);
+      doc.text(
+        cleanText(
+          "To zestawienie pokazuje, ile produktów zostało zużytych w stosunku do początkowego stanu magazynu."
+        ),
+        15,
+        doc.lastAutoTable.finalY + 25
+      );
+
+      const inventorySummaryHeaders = [
+        cleanText("Produkt"),
+        cleanText("Początkowy stan"),
+        cleanText("Końcowy stan"),
+        cleanText("Zużyto"),
+        cleanText("% wykorzystania"),
+      ];
+      const inventorySummaryRows = Array.from(allProducts).map((productId) => {
+        const startProduct = startSnap?.snapshot?.[productId] || {};
+        const endProduct = endSnap?.snapshot?.[productId] || {};
+        const startQty = startProduct.quantity || 0;
+        const endQty = endProduct.quantity || 0;
+        const used = startQty - endQty;
+        const usagePercent =
+          startQty > 0 ? Math.round((used / startQty) * 100) : 0;
+        const unit = startProduct.unit || endProduct.unit || "szt";
+        const name = startProduct.name || endProduct.name || productId;
+        return [
+          cleanText(name),
+          cleanText(formatUnit(startQty, unit)),
+          cleanText(formatUnit(endQty, unit)),
+          cleanText(formatUnit(used, unit)),
+          cleanText(`${usagePercent}%`),
+        ];
+      });
+
+      doc.autoTable({
+        head: [inventorySummaryHeaders],
+        body: inventorySummaryRows,
+        startY: doc.lastAutoTable.finalY + 30,
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [64, 64, 64] },
+        theme: "grid",
+        columnStyles: {
+          0: { cellWidth: 50 },
+          1: { cellWidth: 35, halign: "right" },
+          2: { cellWidth: 35, halign: "right" },
+          3: { cellWidth: 35, halign: "right" },
+          4: { cellWidth: 25, halign: "right" },
+        },
+      });
+
+      // Footer
+      doc.setFontSize(8);
+      doc.setTextColor(128);
+      doc.text(
+        cleanText(`Wygenerowano: ${new Date().toLocaleString()}`),
+        15,
+        doc.internal.pageSize.height - 10
+      );
+
+      // Save the PDF
       doc.save(`raport_${selectedDate}.pdf`);
-    } catch (e) {
-      alert("Błąd generowania PDF");
+      toast.success("Raport PDF został wygenerowany!");
+    } catch (err) {
+      console.error("Błąd generowania PDF:", err);
+      toast.error("Wystąpił błąd podczas generowania raportu PDF");
     }
     setGeneratingPDF(false);
   };
@@ -304,13 +726,7 @@ export default function Dashboard() {
         </div>
         {/* Stan magazynowy */}
         <div>
-          <WarehouseStockTile
-            showSnapshots={isDayEnded}
-            onSnapshotClick={(type) => {
-              setSnapshotType(type);
-              setShowSnapshotModal(true);
-            }}
-          />
+          <WarehouseStockTile />
         </div>
       </div>
       {/* Floating action button w prawym dolnym rogu */}

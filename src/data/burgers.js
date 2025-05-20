@@ -12,6 +12,74 @@ const burgers = [
     image: "/images/new/burgers/klasyk.webp",
   },
   {
+    name: "Cheese",
+    description:
+      "Wołowina Hereford lub Kurczak, ser cheddar x2, sałata, pomidor, ogórek, cebula, sos firmowy",
+    prices: {
+      smash90: 26.0,
+      beef: 31.0,
+      chicken: 27.0,
+    },
+    availableMeats: ["smash90", "beef", "chicken"],
+    image: "/images/new/burgers/cheese.webp",
+  },
+  {
+    name: "Bluecheese",
+    description:
+      "Wołowina Hereford lub Kurczak, bluechesse, sałata, pomidor, ogórek, cebula, sos rózowy",
+    prices: {
+      smash90: 26.0,
+      beef: 32.0,
+      chicken: 28.0,
+    },
+    availableMeats: ["smash90", "beef", "chicken"],
+    image: "/images/new/burgers/bluecheese.webp",
+  },
+  {
+    name: "Sharpjalapeno",
+    description:
+      "Wołowina Hereford lub Kurczak, sałata, ser cheddar x2, pomidor, ostry ogórek, papryczki jalapeno, pikatny sos majonezowy",
+    prices: {
+      smash90: 27.0,
+      beef: 32.0,
+      chicken: 28.0,
+    },
+    availableMeats: ["smash90", "beef", "chicken"],
+    image: "/images/new/burgers/sharpjalapeno.webp",
+  },
+  {
+    name: "Jack Daniels",
+    description:
+      "Wołowina Hereford lub Kurczak, sałata, ser cheddar x2, pomidor, ogórek, cebula prażona, sos Jack Daniels",
+    prices: {
+      smash90: 27.0,
+      beef: 34.0,
+      chicken: 30.0,
+    },
+    availableMeats: ["smash90", "beef", "chicken"],
+    image: "/images/new/burgers/jackdaniels.webp",
+  },
+  {
+    name: "Wege",
+    description: "Kotlet vegański, pomidor, ogórek, sałata, cebula, sos",
+    prices: {
+      beef: 35.0,
+    },
+    availableMeats: ["beef"],
+    image: "/images/new/burgers/wege.webp",
+  },
+  {
+    name: "Szatan",
+    description:
+      "Wołowina Hereford lub Kurczak, pomidor, ostry ogórek, papryczki jalapeno, sałata, cheddar, sos prosto z piekła, jesz tego burgera na własną odpowiedzialność!",
+    prices: {
+      beef: 31.0,
+      chicken: 30.0,
+    },
+    availableMeats: ["beef", "chicken"],
+    image: "/images/new/burgers/szatan.webp",
+  },
+  {
     name: "Wypas",
     description:
       "Wołowina Hereford lub Kurczak, boczek x3, ser cheddar x2, ser gorgonzola, sałata, pomidor, ogórek, cebula prażona, sos firmowy, sos musztardowo-miodowy",

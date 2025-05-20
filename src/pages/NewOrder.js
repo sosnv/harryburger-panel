@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from "react";
 import burgers from "../data/burgers";
 import extras from "../data/extras";
+import drinks from "../data/drinks";
 import ufoBurgers from "../data/ufo-burgers";
+import { warehouseProducts } from "../data/warehouseProducts";
 import { clientDb } from "../firebaseClientConfig";
 import {
   collection,
@@ -12,10 +14,20 @@ import {
 import { useDaySession } from "../contexts/DaySessionContext";
 
 // Wszystkie produkty
+const warehouseDrinks = warehouseProducts
+  .filter((p) => p.category === "napoje")
+  .map((d) => ({
+    name: d.name,
+    price: 0, // Możesz dodać logikę pobierania ceny z magazynu lub ustawić domyślną
+    category: "drink",
+  }));
+
 const products = [
   ...burgers.map((b) => ({ ...b, category: "burger" })),
   ...extras.map((e) => ({ ...e, category: "extra", price: e.price })),
+  ...drinks.map((d) => ({ ...d, category: "drink" })),
   ...ufoBurgers.map((u) => ({ ...u, category: "ufo", price: u.price })),
+  ...warehouseDrinks,
 ];
 
 export default function NewOrder() {
@@ -23,7 +35,7 @@ export default function NewOrder() {
   const [orderType, setOrderType] = useState("naMiejscu");
   const [items, setItems] = useState([]);
   const [configuring, setConfiguring] = useState(null);
-  const [selectedSize, setSelectedSize] = useState("M");
+  const [selectedSize, setSelectedSize] = useState("0.5l");
   const [activeCategory, setActiveCategory] = useState("burger");
   const ordersCol = collection(clientDb, "orders");
   const { selectedDate } = useDaySession();
@@ -158,6 +170,7 @@ export default function NewOrder() {
                   >
                     <option value="cash">Gotówka</option>
                     <option value="card">Karta</option>
+                    <option value="blik_numer">BLIK na numer</option>
                   </select>
                 </div>
                 <div>
@@ -211,7 +224,7 @@ export default function NewOrder() {
                         {item.qty} x {item.price.toFixed(2)} zł
                       </p>
                     </div>
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-center gap-4">
                       <span className="text-white font-semibold">
                         {(item.qty * item.price).toFixed(2)} zł
                       </span>
@@ -298,6 +311,16 @@ export default function NewOrder() {
               >
                 Dodatki
               </button>
+              <button
+                onClick={() => setActiveCategory("drink")}
+                className={`px-4 py-2 rounded-lg ${
+                  activeCategory === "drink"
+                    ? "bg-blue-600 text-white"
+                    : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                }`}
+              >
+                Napoje
+              </button>
             </div>
 
             {/* Lista produktów */}
@@ -324,11 +347,24 @@ export default function NewOrder() {
                   ) : (
                     <p className="text-white font-medium">
                       {prod.prices
-                        ? `${prod.prices.M?.toFixed(
-                            2
-                          )} zł - ${prod.prices.L?.toFixed(2)} zł`
-                        : prod.price.toFixed(2)}{" "}
-                      zł
+                        ? prod.prices["0.5l"] || prod.prices["1l"]
+                          ? `${
+                              prod.prices["0.5l"]
+                                ? prod.prices["0.5l"].toFixed(2)
+                                : ""
+                            } zł${
+                              prod.prices["1l"]
+                                ? ` - ${prod.prices["1l"].toFixed(2)} zł`
+                                : ""
+                            }`
+                          : prod.prices["M"] && prod.prices["L"]
+                          ? `${prod.prices["M"].toFixed(2)} zł - ${prod.prices[
+                              "L"
+                            ].toFixed(2)} zł`
+                          : "Cena niedostępna"
+                        : prod.price
+                        ? `${prod.price.toFixed(2)} zł`
+                        : "Cena niedostępna"}
                     </p>
                   )}
                 </div>
@@ -381,36 +417,77 @@ export default function NewOrder() {
                   ))
               ) : (
                 <>
-                  <button
-                    onClick={() => {
-                      setSelectedSize("M");
-                      addItem(products.find((p) => p.name === configuring));
-                    }}
-                    className="w-full text-left bg-gray-700 hover:bg-gray-600 text-white px-4 py-3 rounded-lg flex justify-between items-center"
-                  >
-                    <span>M</span>
-                    <span className="font-semibold">
-                      {products
-                        .find((p) => p.name === configuring)
-                        ?.prices.M.toFixed(2)}{" "}
-                      zł
-                    </span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      setSelectedSize("L");
-                      addItem(products.find((p) => p.name === configuring));
-                    }}
-                    className="w-full text-left bg-gray-700 hover:bg-gray-600 text-white px-4 py-3 rounded-lg flex justify-between items-center"
-                  >
-                    <span>L</span>
-                    <span className="font-semibold">
-                      {products
-                        .find((p) => p.name === configuring)
-                        ?.prices.L.toFixed(2)}{" "}
-                      zł
-                    </span>
-                  </button>
+                  {products.find((p) => p.name === configuring)?.prices[
+                    "0.5l"
+                  ] !== undefined ? (
+                    <>
+                      <button
+                        onClick={() => {
+                          setSelectedSize("0.5l");
+                          addItem(products.find((p) => p.name === configuring));
+                        }}
+                        className="w-full text-left bg-gray-700 hover:bg-gray-600 text-white px-4 py-3 rounded-lg flex justify-between items-center"
+                      >
+                        <span>0.5L</span>
+                        <span className="font-semibold">
+                          {products
+                            .find((p) => p.name === configuring)
+                            ?.prices["0.5l"].toFixed(2)}{" "}
+                          zł
+                        </span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setSelectedSize("1l");
+                          addItem(products.find((p) => p.name === configuring));
+                        }}
+                        className="w-full text-left bg-gray-700 hover:bg-gray-600 text-white px-4 py-3 rounded-lg flex justify-between items-center"
+                      >
+                        <span>1L</span>
+                        <span className="font-semibold">
+                          {products
+                            .find((p) => p.name === configuring)
+                            ?.prices["1l"].toFixed(2)}{" "}
+                          zł
+                        </span>
+                      </button>
+                    </>
+                  ) : products.find((p) => p.name === configuring)?.prices[
+                      "M"
+                    ] !== undefined ? (
+                    <>
+                      <button
+                        onClick={() => {
+                          setSelectedSize("M");
+                          addItem(products.find((p) => p.name === configuring));
+                        }}
+                        className="w-full text-left bg-gray-700 hover:bg-gray-600 text-white px-4 py-3 rounded-lg flex justify-between items-center"
+                      >
+                        <span>M - 200g</span>
+                        <span className="font-semibold">
+                          {products
+                            .find((p) => p.name === configuring)
+                            ?.prices["M"].toFixed(2)}{" "}
+                          zł
+                        </span>
+                      </button>
+                      <button
+                        onClick={() => {
+                          setSelectedSize("L");
+                          addItem(products.find((p) => p.name === configuring));
+                        }}
+                        className="w-full text-left bg-gray-700 hover:bg-gray-600 text-white px-4 py-3 rounded-lg flex justify-between items-center"
+                      >
+                        <span>L - 300g</span>
+                        <span className="font-semibold">
+                          {products
+                            .find((p) => p.name === configuring)
+                            ?.prices["L"].toFixed(2)}{" "}
+                          zł
+                        </span>
+                      </button>
+                    </>
+                  ) : null}
                 </>
               )}
             </div>

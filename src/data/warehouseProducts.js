@@ -19,4 +19,20 @@ export const warehouseProducts = [
   { name: "Sosy burgerowe", unit: "sztukach po 1 litr", category: "sosy" },
   { name: "Ketchup", unit: "sztukach po 1 litr", category: "sosy" },
   { name: "Majonez", unit: "sztukach po 1 litr", category: "sosy" },
+
+  // Nowe napoje
+  { name: "Pepsi 0.5l", unit: "butelkach 0.5l", category: "napoje" },
+  { name: "Pepsi Twist 0.5l", unit: "butelkach 0.5l", category: "napoje" },
+  { name: "Seven Up 0.5l", unit: "butelkach 0.5l", category: "napoje" },
+  { name: "Mirinda 0.5l", unit: "butelkach 0.5l", category: "napoje" },
+  { name: "Lipton 0.5l", unit: "butelkach 0.5l", category: "napoje" },
+  { name: "Woda gazowana 0.5l", unit: "butelkach 0.5l", category: "napoje" },
+  { name: "Woda niegazowana 0.5l", unit: "butelkach 0.5l", category: "napoje" },
+  { name: "Black 0.25l", unit: "puszkach 0.25l", category: "napoje" },
+  { name: "Soki Toma 0.33l", unit: "kartonach 0.33l", category: "napoje" },
+  { name: "Pepsi 0.25l", unit: "puszkach 0.25l", category: "napoje" },
+  { name: "Lipton 1.5l", unit: "butelkach 1.5l", category: "napoje" },
+  { name: "Pepsi 2l", unit: "butelkach 2l", category: "napoje" },
+  { name: "Mirinda 2l", unit: "butelkach 2l", category: "napoje" },
+  { name: "Sałatka szwecka", unit: "słoikach", category: "dodatki" },
 ];

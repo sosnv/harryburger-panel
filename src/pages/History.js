@@ -104,10 +104,14 @@ export default function History() {
                       {item.meat && <span> (Mięso: {item.meat})</span>}
                       {item.size && <span> (Rozmiar: {item.size})</span>}
                       {item.flavor && <span> (Smak: {item.flavor})</span>}
-                      <span> × {item.quantity}</span>
+                      <span> × {item.qty || item.quantity}</span>
                     </div>
                     <div className="text-gray-200">
-                      {(item.price * item.quantity).toFixed(2)} zł
+                      {typeof item.price === "number" && !isNaN(item.price)
+                        ? (
+                            (item.price || 0) * (item.qty || item.quantity || 1)
+                          ).toFixed(2) + " zł"
+                        : "Brak ceny"}
                     </div>
                   </li>
                 ))}

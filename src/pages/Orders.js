@@ -15,6 +15,16 @@ export default function Orders() {
   const [confirmMessage, setConfirmMessage] = useState("");
   const [pendingAction, setPendingAction] = useState(null);
   const [pendingId, setPendingId] = useState(null);
+  const [editing, setEditing] = useState({ orderId: null, itemIdx: null });
+  const [selectedMeat, setSelectedMeat] = useState("");
+  const [editingPayment, setEditingPayment] = useState({
+    orderId: null,
+    value: "",
+  });
+  const [editingOrderType, setEditingOrderType] = useState({
+    orderId: null,
+    value: "",
+  });
 
   useEffect(() => {
     const ordersRef = collection(clientDb, "orders");
@@ -66,6 +76,57 @@ export default function Orders() {
     setConfirmOpen(false);
     setPendingAction(null);
     setPendingId(null);
+  };
+
+  const handleEditMeat = (orderId, itemIdx, currentMeat) => {
+    setEditing({ orderId, itemIdx });
+    setSelectedMeat(currentMeat || "beef");
+  };
+
+  const handleSaveMeat = async (orderId, itemIdx) => {
+    const order = orders.find((o) => o.id === orderId);
+    if (!order) return;
+    const updatedItems = order.items.map((item, idx) =>
+      idx === itemIdx ? { ...item, meat: selectedMeat } : item
+    );
+    try {
+      await updateDoc(doc(clientDb, "orders", orderId), {
+        items: updatedItems,
+      });
+      setEditing({ orderId: null, itemIdx: null });
+    } catch (e) {
+      alert("Błąd podczas zapisu zmiany mięsa");
+    }
+  };
+
+  const handleEditPayment = (orderId, currentPayment) => {
+    setEditingPayment({ orderId, value: currentPayment });
+  };
+
+  const handleSavePayment = async (orderId) => {
+    try {
+      await updateDoc(doc(clientDb, "orders", orderId), {
+        paymentMethod: editingPayment.value,
+      });
+      setEditingPayment({ orderId: null, value: "" });
+    } catch (e) {
+      alert("Błąd podczas zapisu metody płatności");
+    }
+  };
+
+  const handleEditOrderType = (orderId, currentType) => {
+    setEditingOrderType({ orderId, value: currentType });
+  };
+
+  const handleSaveOrderType = async (orderId) => {
+    try {
+      await updateDoc(doc(clientDb, "orders", orderId), {
+        orderType: editingOrderType.value,
+      });
+      setEditingOrderType({ orderId: null, value: "" });
+    } catch (e) {
+      alert("Błąd podczas zapisu typu zamówienia");
+    }
   };
 
   const sorted = [...orders].sort((a, b) => {
@@ -121,11 +182,59 @@ export default function Orders() {
                 <div className="flex flex-wrap items-center justify-between w-full mb-4 text-gray-300 space-x-6">
                   <div className="flex items-center space-x-1">
                     <p className="text-sm text-gray-400">Metoda:</p>
-                    <p className="text-white font-semibold">
-                      {order.paymentMethod === "cash"
-                        ? "Gotówka"
-                        : order.paymentMethod}
-                    </p>
+                    {editingPayment.orderId === order.id ? (
+                      <div className="flex items-center space-x-2">
+                        <select
+                          value={editingPayment.value}
+                          onChange={(e) =>
+                            setEditingPayment((prev) => ({
+                              ...prev,
+                              value: e.target.value,
+                            }))
+                          }
+                          className="bg-gray-700 text-white border border-gray-600 rounded px-2 py-1"
+                        >
+                          <option value="cash">Gotówka</option>
+                          <option value="card">Karta</option>
+                          <option value="blik">BLIK</option>
+                          <option value="blikNaNumer">BLIK na numer</option>
+                        </select>
+                        <button
+                          onClick={() => handleSavePayment(order.id)}
+                          className="text-green-400 hover:text-green-300"
+                        >
+                          ✓
+                        </button>
+                        <button
+                          onClick={() =>
+                            setEditingPayment({ orderId: null, value: "" })
+                          }
+                          className="text-red-400 hover:text-red-300"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center">
+                        <p className="text-white font-semibold">
+                          {order.paymentMethod === "cash"
+                            ? "Gotówka"
+                            : order.paymentMethod === "blikNaNumer"
+                            ? "BLIK na numer"
+                            : order.paymentMethod}
+                        </p>
+                        {!isPaid && (
+                          <button
+                            onClick={() =>
+                              handleEditPayment(order.id, order.paymentMethod)
+                            }
+                            className="ml-2 text-blue-400 hover:text-blue-300"
+                          >
+                            ✎
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <div className="flex items-center space-x-1">
                     <p className="text-sm text-gray-400">Klient:</p>
@@ -135,13 +244,57 @@ export default function Orders() {
                   </div>
                   <div className="flex items-center space-x-1">
                     <p className="text-sm text-gray-400">Typ:</p>
-                    <p className="text-white font-semibold">
-                      {order.orderType === "naMiejscu"
-                        ? "Na miejscu"
-                        : order.orderType === "naWynos"
-                        ? "Na wynos"
-                        : order.orderType}
-                    </p>
+                    {editingOrderType.orderId === order.id ? (
+                      <div className="flex items-center space-x-2">
+                        <select
+                          value={editingOrderType.value}
+                          onChange={(e) =>
+                            setEditingOrderType((prev) => ({
+                              ...prev,
+                              value: e.target.value,
+                            }))
+                          }
+                          className="bg-gray-700 text-white border border-gray-600 rounded px-2 py-1"
+                        >
+                          <option value="naMiejscu">Na miejscu</option>
+                          <option value="naWynos">Na wynos</option>
+                        </select>
+                        <button
+                          onClick={() => handleSaveOrderType(order.id)}
+                          className="text-green-400 hover:text-green-300"
+                        >
+                          ✓
+                        </button>
+                        <button
+                          onClick={() =>
+                            setEditingOrderType({ orderId: null, value: "" })
+                          }
+                          className="text-red-400 hover:text-red-300"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center">
+                        <p className="text-white font-semibold">
+                          {order.orderType === "naMiejscu"
+                            ? "Na miejscu"
+                            : order.orderType === "naWynos"
+                            ? "Na wynos"
+                            : order.orderType}
+                        </p>
+                        {!isPaid && (
+                          <button
+                            onClick={() =>
+                              handleEditOrderType(order.id, order.orderType)
+                            }
+                            className="ml-2 text-blue-400 hover:text-blue-300"
+                          >
+                            ✎
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <div className="flex items-center space-x-1">
                     <p className="text-sm text-gray-400">Złożone:</p>
@@ -160,9 +313,63 @@ export default function Orders() {
                         key={i}
                         className="flex justify-between items-center py-2 px-4 bg-gray-700 rounded"
                       >
-                        <div className="text-gray-200">
-                          <span className="font-semibold">{item.name}</span> x
-                          {item.qty}
+                        <div className="text-gray-200 flex items-center gap-2">
+                          <span className="font-semibold">{item.name}</span>
+                          {item.meat && (
+                            <span className="ml-2 text-gray-400">
+                              (Mięso:{" "}
+                              {item.meat === "smash90"
+                                ? "Smash 90g"
+                                : item.meat === "beef"
+                                ? "Wołowina"
+                                : item.meat === "chicken"
+                                ? "Kurczak"
+                                : item.meat}
+                              )
+                            </span>
+                          )}
+                          {!isPaid &&
+                            item.category === "burger" &&
+                            (editing.orderId === order.id &&
+                            editing.itemIdx === i ? (
+                              <>
+                                <select
+                                  value={selectedMeat}
+                                  onChange={(e) =>
+                                    setSelectedMeat(e.target.value)
+                                  }
+                                  className="bg-gray-800 text-white px-2 py-1 rounded ml-2"
+                                >
+                                  <option value="beef">Wołowina</option>
+                                  <option value="chicken">Kurczak</option>
+                                  <option value="smash90">Smash 90g</option>
+                                </select>
+                                <button
+                                  onClick={() => handleSaveMeat(order.id, i)}
+                                  className="ml-2 bg-green-600 hover:bg-green-500 text-white px-2 py-1 rounded"
+                                >
+                                  Zapisz
+                                </button>
+                                <button
+                                  onClick={() =>
+                                    setEditing({ orderId: null, itemIdx: null })
+                                  }
+                                  className="ml-2 bg-gray-600 hover:bg-gray-500 text-white px-2 py-1 rounded"
+                                >
+                                  Anuluj
+                                </button>
+                              </>
+                            ) : (
+                              <button
+                                onClick={() =>
+                                  handleEditMeat(order.id, i, item.meat)
+                                }
+                                className="ml-2 text-blue-400 underline text-sm"
+                              >
+                                Edytuj mięso
+                              </button>
+                            ))}
+                          <span className="ml-2">x{item.qty}</span>
                         </div>
                         <span className="text-white font-medium">
                           {(item.price * item.qty).toFixed(2)} zł
