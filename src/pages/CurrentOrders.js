@@ -3,19 +3,33 @@ import React, { useEffect, useState } from "react";
 import { collection, onSnapshot, updateDoc, doc } from "firebase/firestore";
 import { motion } from "framer-motion";
 import { clientDb } from "../firebaseClientConfig";
+import { useDaySession } from "../contexts/DaySessionContext";
 
 function CurrentOrders() {
   const [orders, setOrders] = useState([]);
   const [showDeleteNotification, setShowDeleteNotification] = useState(false);
   const [showConfirmDelete, setShowConfirmDelete] = useState(false);
   const [orderIdToDelete, setOrderIdToDelete] = useState(null);
+  const { selectedDate } = useDaySession();
 
   useEffect(() => {
     const ordersCollection = collection(clientDb, "orders");
 
     const unsubscribe = onSnapshot(ordersCollection, (snapshot) => {
       const fetchedOrders = snapshot.docs
-        .filter((doc) => !doc.data().isArchived)
+        .filter((doc) => {
+          const data = doc.data();
+          return (
+            !data.isArchived &&
+            // Sprawdzamy zamówienia z wybranego dnia
+            (data.sessionDay === selectedDate ||
+              // Fallback dla starszych zamówień bez sessionDay
+              (!data.sessionDay &&
+                data.timestamp &&
+                data.timestamp.toDate().toISOString().split("T")[0] ===
+                  selectedDate))
+          );
+        })
         .map((doc) => ({
           id: doc.id,
           ...doc.data(),
@@ -24,7 +38,7 @@ function CurrentOrders() {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [selectedDate]); // Dodanie selectedDate jako dependency
 
   // Funkcja do potwierdzenia usunięcia zamówienia
   const confirmDeleteOrder = (orderId) => {

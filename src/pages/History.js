@@ -1,24 +1,43 @@
 import React, { useEffect, useState } from "react";
 import { collection, onSnapshot, deleteDoc, doc } from "firebase/firestore";
 import { clientDb } from "../firebaseClientConfig";
+import { useDaySession } from "../contexts/DaySessionContext";
 
 export default function History() {
   const [orders, setOrders] = useState([]);
   const [sortOption, setSortOption] = useState("deletion");
+  const { selectedDate } = useDaySession();
 
   useEffect(() => {
     const ordersCollection = collection(clientDb, "orders");
     const unsubscribe = onSnapshot(ordersCollection, (snapshot) => {
       const fetched = snapshot.docs
-        .filter((d) => d.data().isArchived)
+        .filter((d) => {
+          const data = d.data();
+          return (
+            data.isArchived &&
+            // Sprawdzamy zamówienia z wybranego dnia
+            (data.sessionDay === selectedDate ||
+              // Fallback dla starszych zamówień bez sessionDay
+              (!data.sessionDay &&
+                data.timestamp &&
+                data.timestamp.toDate().toISOString().split("T")[0] ===
+                  selectedDate))
+          );
+        })
         .map((d) => ({ id: d.id, ...d.data() }));
       setOrders(fetched);
     });
     return () => unsubscribe();
-  }, []);
+  }, [selectedDate]);
 
   const clearHistory = async () => {
-    if (!window.confirm("Na pewno wyczyścić całą historię zamówień?")) return;
+    if (
+      !window.confirm(
+        `Na pewno wyczyścić historię zamówień z dnia ${selectedDate}?`
+      )
+    )
+      return;
     try {
       await Promise.all(
         orders.map((order) => deleteDoc(doc(clientDb, "orders", order.id)))
@@ -37,7 +56,9 @@ export default function History() {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-3xl font-bold text-white">Historia</h2>
+      <h2 className="text-3xl font-bold text-white">
+        Historia zamówień - {selectedDate} ({sorted.length})
+      </h2>
       <div className="flex justify-between items-center">
         <div className="flex items-center space-x-2">
           <label className="text-gray-300 font-medium">Sortuj:</label>
@@ -54,7 +75,7 @@ export default function History() {
           onClick={clearHistory}
           className="bg-red-600 hover:bg-red-500 text-white font-medium px-4 py-2 rounded"
         >
-          Wyczyść historię
+          Wyczyść historię tego dnia
         </button>
       </div>
 

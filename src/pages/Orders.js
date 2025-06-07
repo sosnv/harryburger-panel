@@ -7,6 +7,7 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import { clientDb } from "../firebaseClientConfig";
+import { useDaySession } from "../contexts/DaySessionContext";
 
 export default function Orders() {
   const [orders, setOrders] = useState([]);
@@ -25,17 +26,29 @@ export default function Orders() {
     orderId: null,
     value: "",
   });
+  const { selectedDate } = useDaySession();
 
   useEffect(() => {
     const ordersRef = collection(clientDb, "orders");
     const unsubscribe = onSnapshot(ordersRef, (snapshot) => {
       const data = snapshot.docs
         .map((doc) => ({ id: doc.id, ...doc.data() }))
-        .filter((order) => !order.isArchived);
+        .filter((order) => {
+          return (
+            !order.isArchived &&
+            // Sprawdzamy zamówienia z wybranego dnia
+            (order.sessionDay === selectedDate ||
+              // Fallback dla starszych zamówień bez sessionDay
+              (!order.sessionDay &&
+                order.timestamp &&
+                order.timestamp.toDate().toISOString().split("T")[0] ===
+                  selectedDate))
+          );
+        });
       setOrders(data);
     });
     return () => unsubscribe();
-  }, []);
+  }, [selectedDate]);
 
   const openConfirm = (id, action) => {
     const msg =
@@ -137,7 +150,9 @@ export default function Orders() {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-3xl font-bold text-white">Aktywne zamówienia</h2>
+      <h2 className="text-3xl font-bold text-white">
+        Aktywne zamówienia - {selectedDate}
+      </h2>
       {/* Sortowanie */}
       <div className="flex items-center mb-4">
         <label className="mr-2 text-gray-300 font-medium">Sortuj:</label>
@@ -156,10 +171,10 @@ export default function Orders() {
           sorted.map((order) => {
             const isPaid = order.status === "opłacono zamówienie";
             const total =
-              order.items?.reduce(
+              (order.items?.reduce(
                 (sum, item) => sum + item.price * item.qty,
                 0
-              ) || 0;
+              ) || 0) + (order.deliveryFee || 0);
             return (
               <li key={order.id} className="bg-[#1a1a1a] p-6 rounded-lg shadow">
                 {/* Nagłówek */}
@@ -219,8 +234,19 @@ export default function Orders() {
                         <p className="text-white font-semibold">
                           {order.paymentMethod === "cash"
                             ? "Gotówka"
-                            : order.paymentMethod === "blikNaNumer"
+                            : order.paymentMethod === "blikNaNumer" ||
+                              order.paymentMethod === "blik_numer"
                             ? "BLIK na numer"
+                            : order.paymentMethod === "split"
+                            ? `Podzielona: ${
+                                order.splitPayment?.payment1?.method
+                              } (${parseFloat(
+                                order.splitPayment?.payment1?.amount || 0
+                              ).toFixed(2)} zł) + ${
+                                order.splitPayment?.payment2?.method
+                              } (${parseFloat(
+                                order.splitPayment?.payment2?.amount || 0
+                              ).toFixed(2)} zł)`
                             : order.paymentMethod}
                         </p>
                         {!isPaid && (
@@ -258,6 +284,7 @@ export default function Orders() {
                         >
                           <option value="naMiejscu">Na miejscu</option>
                           <option value="naWynos">Na wynos</option>
+                          <option value="dostawa">Dostawa</option>
                         </select>
                         <button
                           onClick={() => handleSaveOrderType(order.id)}
@@ -281,6 +308,12 @@ export default function Orders() {
                             ? "Na miejscu"
                             : order.orderType === "naWynos"
                             ? "Na wynos"
+                            : order.orderType === "dostawa"
+                            ? `Dostawa (${
+                                order.deliveryFee
+                                  ? order.deliveryFee.toFixed(2) + " zł"
+                                  : ""
+                              })`
                             : order.orderType}
                         </p>
                         {!isPaid && (
@@ -303,6 +336,16 @@ export default function Orders() {
                     </p>
                   </div>
                 </div>
+
+                {/* Adnotacje klienta */}
+                {order.customerNote && (
+                  <div className="mb-4 p-3 bg-yellow-900/30 border border-yellow-700 rounded">
+                    <p className="text-sm text-yellow-400">
+                      <span className="font-semibold">Uwagi klienta:</span>{" "}
+                      {order.customerNote}
+                    </p>
+                  </div>
+                )}
 
                 {/* Pozycje */}
                 <div>

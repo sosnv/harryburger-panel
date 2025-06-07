@@ -61,6 +61,21 @@ export default function NewOrder() {
       } else {
         price = prod.price;
       }
+
+      // Sprawdzenie czy price nie jest undefined
+      if (price === undefined || price === null) {
+        console.error(
+          "Cena nie została znaleziona dla produktu:",
+          prod.name,
+          "rozmiar:",
+          selectedSize
+        );
+        alert(
+          "Błąd: Nie można znaleźć ceny dla tego produktu. Spróbuj ponownie."
+        );
+        return prev;
+      }
+
       return [
         ...prev,
         {
@@ -221,12 +236,12 @@ export default function NewOrder() {
                         )}
                       </p>
                       <p className="text-sm text-gray-400">
-                        {item.qty} x {item.price.toFixed(2)} zł
+                        {item.qty} x {(item.price || 0).toFixed(2)} zł
                       </p>
                     </div>
                     <div className="flex items-center gap-4">
                       <span className="text-white font-semibold">
-                        {(item.qty * item.price).toFixed(2)} zł
+                        {((item.qty || 0) * (item.price || 0)).toFixed(2)} zł
                       </span>
                       <button
                         onClick={() => removeItem(idx)}
@@ -253,7 +268,11 @@ export default function NewOrder() {
                     <span className="text-gray-300">Suma:</span>
                     <span className="text-white font-bold text-lg">
                       {items
-                        .reduce((sum, item) => sum + item.price * item.qty, 0)
+                        .reduce(
+                          (sum, item) =>
+                            sum + (item.price || 0) * (item.qty || 0),
+                          0
+                        )
                         .toFixed(2)}{" "}
                       zł
                     </span>
@@ -333,6 +352,12 @@ export default function NewOrder() {
                     if (prod.category === "burger") {
                       setConfiguring(prod.name);
                     } else if (prod.prices) {
+                      // Ustawienie domyślnego rozmiaru w zależności od typu produktu
+                      if (prod.prices["M"] !== undefined) {
+                        setSelectedSize("M");
+                      } else if (prod.prices["0.5l"] !== undefined) {
+                        setSelectedSize("0.5l");
+                      }
                       setConfiguring(prod.name);
                     } else {
                       addItem(prod);
@@ -347,17 +372,19 @@ export default function NewOrder() {
                   ) : (
                     <p className="text-white font-medium">
                       {prod.prices
-                        ? prod.prices["0.5l"] || prod.prices["1l"]
+                        ? prod.prices["0.5l"] !== undefined ||
+                          prod.prices["1l"] !== undefined
                           ? `${
-                              prod.prices["0.5l"]
+                              prod.prices["0.5l"] !== undefined
                                 ? prod.prices["0.5l"].toFixed(2)
                                 : ""
                             } zł${
-                              prod.prices["1l"]
+                              prod.prices["1l"] !== undefined
                                 ? ` - ${prod.prices["1l"].toFixed(2)} zł`
                                 : ""
                             }`
-                          : prod.prices["M"] && prod.prices["L"]
+                          : prod.prices["M"] !== undefined &&
+                            prod.prices["L"] !== undefined
                           ? `${prod.prices["M"].toFixed(2)} zł - ${prod.prices[
                               "L"
                             ].toFixed(2)} zł`

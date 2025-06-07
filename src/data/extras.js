@@ -22,6 +22,13 @@ const extras = [
     image: "/images/new/extras/krazki-cebulowe.webp",
   },
   {
+    id: 4,
+    name: "Sos",
+    description: "Dodatkowy sos do wyboru.",
+    price: 3.0,
+    image: "/images/new/extras/sos.webp",
+  },
+  {
     id: 5,
     name: "Popsy",
     description: "Kawałki kurczaka w chrupiącej panierce.",

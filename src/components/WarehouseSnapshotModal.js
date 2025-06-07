@@ -1,8 +1,12 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { FaPlus, FaMinus } from "react-icons/fa";
 import { warehouseProducts } from "../data/warehouseProducts";
+import { collection, getDocs } from "firebase/firestore";
+import { clientDb } from "../firebaseClientConfig";
+import { useDaySession } from "../contexts/DaySessionContext";
 
 export default function WarehouseSnapshotModal({ type, onSave, onClose }) {
+  const { selectedDate } = useDaySession();
   // Tworzymy mapę ilości na podstawie warehouseProducts
   const [quantities, setQuantities] = useState(() => {
     const initial = {};
@@ -14,12 +18,67 @@ export default function WarehouseSnapshotModal({ type, onSave, onClose }) {
   const [saving, setSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
+  const [loadingPreviousDay, setLoadingPreviousDay] = useState(false);
 
   // Kategorie do filtrowania
   const categories = [
     "all",
     ...Array.from(new Set(warehouseProducts.map((p) => p.category))),
   ];
+
+  // Funkcja do załadowania stanu z poprzedniego dnia
+  const loadPreviousDayState = async () => {
+    setLoadingPreviousDay(true);
+    try {
+      // Znajdź poprzedni dzień
+      const currentDate = new Date(selectedDate);
+      currentDate.setDate(currentDate.getDate() - 1);
+      const previousDate = currentDate.toISOString().split("T")[0];
+
+      // Pobierz snapshoty z poprzedniego dnia
+      const snapQ = collection(clientDb, "dailyWarehouseReports");
+      const snapDocs = await getDocs(snapQ);
+      const previousDaySnapshots = snapDocs.docs
+        .map((doc) => doc.data())
+        .filter(
+          (snap) => snap.sessionDay === previousDate && snap.type === "end"
+        )
+        .sort(
+          (a, b) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0)
+        );
+
+      if (previousDaySnapshots.length > 0) {
+        const lastSnapshot = previousDaySnapshots[0].snapshot;
+        const newQuantities = {};
+
+        // Ustaw ilości z poprzedniego dnia
+        Object.values(lastSnapshot).forEach((product) => {
+          if (product.name && typeof product.quantity !== "undefined") {
+            newQuantities[product.name] = product.quantity;
+          }
+        });
+
+        // Ustaw wartości dla produktów które nie były w poprzednim snaphocie
+        warehouseProducts.forEach((p) => {
+          if (!(p.name in newQuantities)) {
+            newQuantities[p.name] = 0;
+          }
+        });
+
+        setQuantities(newQuantities);
+        alert(`Załadowano stan końcowy z dnia ${previousDate}`);
+      } else {
+        alert(
+          `Nie znaleziono stanu końcowego z poprzedniego dnia (${previousDate})`
+        );
+      }
+    } catch (error) {
+      console.error("Error loading previous day state:", error);
+      alert("Błąd podczas ładowania stanu z poprzedniego dnia");
+    } finally {
+      setLoadingPreviousDay(false);
+    }
+  };
 
   // Filtrowanie produktów
   const filteredProducts = warehouseProducts.filter((p) => {
@@ -83,6 +142,23 @@ export default function WarehouseSnapshotModal({ type, onSave, onClose }) {
             ? "Stan magazynowy na początek dnia"
             : "Stan magazynowy na koniec dnia"}
         </h2>
+
+        {/* Przycisk do ładowania stanu z poprzedniego dnia - tylko dla stanu początkowego */}
+        {type === "start" && (
+          <div className="flex justify-center mb-6">
+            <button
+              type="button"
+              onClick={loadPreviousDayState}
+              disabled={loadingPreviousDay}
+              className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {loadingPreviousDay
+                ? "Ładowanie..."
+                : "Załaduj stan z poprzedniego dnia"}
+            </button>
+          </div>
+        )}
+
         {/* Filtry */}
         <div className="flex gap-4 mb-6 flex-wrap items-center">
           <div className="relative flex-1 min-w-[200px]">

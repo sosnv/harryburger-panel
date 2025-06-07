@@ -43,20 +43,39 @@ export default function Sidebar() {
       let archived = 0;
       snapshot.docs.forEach((doc) => {
         const data = doc.data();
-        if (data.isArchived) archived++;
-        else active++;
+
+        // Sprawdź czy zamówienie jest z wybranego dnia
+        const isFromSelectedDay =
+          data.sessionDay === selectedDate ||
+          (!data.sessionDay &&
+            data.timestamp &&
+            data.timestamp.toDate().toISOString().split("T")[0] ===
+              selectedDate);
+
+        if (isFromSelectedDay) {
+          if (!data.isArchived) {
+            active++;
+          } else {
+            archived++;
+          }
+        }
       });
       setActiveOrders(active);
       setArchivedOrders(archived);
     });
     return () => unsub();
-  }, []);
+  }, [selectedDate]);
 
   const navLinks = [
     { to: "/", label: "Pulpit" },
     { to: "/orders", label: "Aktywne zamówienia", blockedWhenDayEnded: true },
     { to: "/history", label: "Historia", blockedWhenDayEnded: false },
     { to: "/new-order", label: "Stwórz zamówienie", blockedWhenDayEnded: true },
+    {
+      to: "/employee-consumption",
+      label: "Zużycie własne",
+      blockedWhenDayEnded: true,
+    },
     { to: "/warehouse", label: "Stan magazynowy", blockedWhenDayEnded: false },
     {
       to: "/day-settings",
